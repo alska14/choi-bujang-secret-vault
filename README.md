@@ -98,7 +98,7 @@ DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticate
 
 - `/api/auth`(`src/auth-api.mjs`)가 로그인·가입·토큰 갱신·로그아웃을 대신 받습니다. 브라우저에는 `access_token`, `refresh_token`, `expires_at`, `email`만 돌려주고, 이 토큰을 `/api/notes`에 `Authorization: Bearer`로 보냅니다. 서버 함수의 로그인·소유자 검사는 4단계 그대로입니다.
 - `db/revoke-direct.sql`로 `notes` 테이블의 `public·anon·authenticated` 직접 권한을 모두 회수했습니다. 서버 함수는 서버 전용 키(`service_role`)로 접속해 영향이 없습니다. RLS와 정책은 남겨 둔 이중 방어입니다.
-- 쿼리 없는 원본 자료 경로는 `aleph.config.json`의 `originalApiUrl`에 적었습니다.
+- 쿼리 없는 원본 자료 경로는 `aleph.config.json`의 `originalApiUrl`에 적었습니다. 심판은 배포 주소의 `/aleph.json`에서 이 값을 읽으므로, 빌드(`scripts/deployment-identity.mjs`)가 `originalApiUrl`, `allowedRoutes`, `identityProvider`(비밀값 없음)를 `/aleph.json`에도 기록합니다. 설정에만 적고 `/aleph.json`에 안 옮기면 심판이 `S05_ORIGINAL_URL_MISSING`으로 거부합니다.
 
 ### 5단계 확인 결과 (2026-10-06)
 

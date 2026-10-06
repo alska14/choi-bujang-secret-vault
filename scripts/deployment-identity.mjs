@@ -18,7 +18,7 @@ export function deploymentIdentity(env, config) {
       || !/^[A-Z0-9_]{1,80}$/u.test(config.sampleMarker)) {
     throw new Error('배포 식별 정보를 확인할 수 없습니다. Vercel 시스템 환경변수와 aleph.config.json의 step을 확인하세요.');
   }
-  return {
+  const identity = {
     schema: 'aleph.defense.deployment.v1',
     step: config.step,
     repoUrl: `https://github.com/${owner.toLowerCase()}/${repo.toLowerCase()}`,
@@ -27,4 +27,19 @@ export function deploymentIdentity(env, config) {
     judgeIssuer: config.judgeIssuer,
     sampleMarker: config.sampleMarker,
   };
+  // 단계가 올라가며 심판이 /aleph.json에서 읽는 값입니다. 비밀값은 없고, 설정에 있을 때만 옮겨 담습니다.
+  if (config.identityProvider) identity.identityProvider = config.identityProvider;
+  if (Array.isArray(config.allowedRoutes) && config.allowedRoutes.length) {
+    identity.allowedRoutes = config.allowedRoutes;
+  }
+  if (config.originalApiUrl) {
+    const original = new URL(config.originalApiUrl);
+    if (original.protocol !== 'https:' || original.username || original.password
+        || original.search || original.hash) {
+      throw new Error('aleph.config.json의 originalApiUrl은 쿼리 없는 HTTPS 주소여야 합니다.');
+    }
+    identity.originalApiUrl = config.originalApiUrl;
+  }
+  if (config.restoreRoute) identity.restoreRoute = config.restoreRoute;
+  return identity;
 }

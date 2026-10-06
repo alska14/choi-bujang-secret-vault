@@ -55,3 +55,17 @@ test('first attack check reads public data.json without credentials', async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test('5단계 설정의 허용 경로와 원본 주소가 배포 식별 정보에 들어간다', () => {
+  const step5 = { ...config, step: 5, allowedRoutes: ['GET /api/notes'],
+    originalApiUrl: 'https://student.supabase.co/rest/v1/notes',
+    identityProvider: { issuer: 'https://student.supabase.co/auth/v1', audience: 'authenticated',
+      jwksUrl: 'https://student.supabase.co/auth/v1/.well-known/jwks.json' } };
+  const identity = deploymentIdentity(env, step5);
+  assert.equal(identity.step, 5);
+  assert.deepEqual(identity.allowedRoutes, ['GET /api/notes']);
+  assert.equal(identity.originalApiUrl, 'https://student.supabase.co/rest/v1/notes');
+  assert.equal(identity.identityProvider.audience, 'authenticated');
+  assert.throws(() => deploymentIdentity(env, { ...step5, originalApiUrl: 'https://x.co/rest/v1/notes?select=*' }));
+  assert.throws(() => deploymentIdentity(env, { ...step5, originalApiUrl: 'http://x.co/rest/v1/notes' }));
+});
