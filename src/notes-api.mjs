@@ -34,7 +34,8 @@ function readFields(request) {
 
 const publicNote = row => ({ id: row.id, title: row.title, body: row.content });
 
-// db: { list(ownerId), insert(row), get(id), update(id, patch), remove(id) }
+// db: { list(ownerId), insert(row), get(id, ownerId), update(id, ownerId, patch), remove(id, ownerId) }
+// 조회·수정·삭제는 id와 확인된 사용자 ID가 모두 맞는 행만 다룹니다. 본문·URL의 owner_id는 쓰지 않습니다.
 export function createNotesApi({ verify, db }) {
   async function authenticate(request, response) {
     const identity = await verify(request.headers?.authorization);
@@ -74,26 +75,23 @@ export function createNotesApi({ verify, db }) {
     return send(response, 405, { error: 'METHOD_NOT_ALLOWED', message: '허용되지 않는 방법입니다.' });
   });
 
-  // 소유자 검사는 아직 없습니다. 4단계에서 owner_id 비교를 붙입니다.
-  const item = guard(async (request, response) => {
+  const notFound = response => send(response, 404, { error: 'NOT_FOUND', message: '메모를 찾을 수 없습니다.' });
+  const item = guard(async (request, response, identity) => {
     const id = request.query?.id;
     if (typeof id !== 'string' || !UUID.test(id)) return bad(response);
+    const owner = identity.userId;
     if (request.method === 'GET') {
-      const row = await db.get(id);
-      return row ? send(response, 200, publicNote(row))
-        : send(response, 404, { error: 'NOT_FOUND', message: '메모를 찾을 수 없습니다.' });
+      const row = await db.get(id, owner);
+      return row ? send(response, 200, publicNote(row)) : notFound(response);
     }
     if (request.method === 'PUT') {
       const fields = readFields(request);
       if (!fields) return bad(response);
-      const row = await db.update(id, { title: fields.title, content: fields.body });
-      return row ? send(response, 200, publicNote(row))
-        : send(response, 404, { error: 'NOT_FOUND', message: '메모를 찾을 수 없습니다.' });
+      const row = await db.update(id, owner, { title: fields.title, content: fields.body });
+      return row ? send(response, 200, publicNote(row)) : notFound(response);
     }
     if (request.method === 'DELETE') {
-      const removed = await db.remove(id);
-      return removed ? send(response, 204)
-        : send(response, 404, { error: 'NOT_FOUND', message: '메모를 찾을 수 없습니다.' });
+      return (await db.remove(id, owner)) ? send(response, 204) : notFound(response);
     }
     response.setHeader('Allow', 'GET, PUT, DELETE');
     return send(response, 405, { error: 'METHOD_NOT_ALLOWED', message: '허용되지 않는 방법입니다.' });
@@ -118,18 +116,22 @@ function supabaseDb(client) {
       fail(error);
       return true;
     },
-    async get(id) {
-      const { data, error } = await client.from('notes').select(columns).eq('id', id).maybeSingle();
+    async get(id, ownerId) {
+      const { data, error } = await client.from('notes').select(columns)
+        .eq('id', id).eq('owner_id', ownerId).maybeSingle();
       fail(error);
       return data;
     },
-    async update(id, patch) {
-      const { data, error } = await client.from('notes').update(patch).eq('id', id).select(columns);
+    // patch에는 owner_id를 넣지 않습니다. 기존 행의 소유자도 조건으로 다시 확인합니다.
+    async update(id, ownerId, patch) {
+      const { data, error } = await client.from('notes').update(patch)
+        .eq('id', id).eq('owner_id', ownerId).select(columns);
       fail(error);
       return data[0] ?? null;
     },
-    async remove(id) {
-      const { data, error } = await client.from('notes').delete().eq('id', id).select('id');
+    async remove(id, ownerId) {
+      const { data, error } = await client.from('notes').delete()
+        .eq('id', id).eq('owner_id', ownerId).select('id');
       fail(error);
       return data.length > 0;
     },

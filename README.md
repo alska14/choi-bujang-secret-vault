@@ -69,7 +69,25 @@
 
 ### 3단계 남은 약점
 
-- `GET·PUT·DELETE /api/notes/:id`는 아직 소유자 검사를 하지 않습니다. 로그인한 B가 A의 메모 id를 알면 읽고 고치고 지울 수 있습니다. 4단계에서 `owner_id`를 비교해 막습니다. 목록 `GET /api/notes`만 본인 메모로 거릅니다.
+- (3단계 시점) `GET·PUT·DELETE /api/notes/:id`는 소유자 검사를 하지 않아, 로그인한 B가 A의 메모 id를 알면 읽고 고치고 지울 수 있었습니다. 4단계에서 막았습니다.
 - 로그인은 신원 확인일 뿐 권한 구분이 없습니다.
 - 옛 공개 커밋 `93f6d0e`와 옛 배포의 과거 노출은 여전히 해소되지 않았습니다.
 - 이 단계의 점검(`src/attack-check.mjs`)은 로그인 없는 요청만 직접 보냈고, 로그인한 A·B 계정 시험은 실행하지 않았습니다.
+
+## 4단계: 로그인해도 내 자료만 보이게
+
+API는 검증된 사용자 ID와 DB의 `owner_id`를 비교합니다. `GET·PUT·DELETE /api/notes/:id`는 id와 소유자가 모두 맞는 행만 다루고, 남의 메모나 주인 없는 메모는 존재 여부를 알리지 않도록 404로 거부합니다. 추가할 때 `owner_id`는 확인된 사용자 ID로 저장하며, URL·본문의 `owner_id`는 쓰지 않습니다. 수정은 소유자를 바꾸지 않고, 삭제는 본인 메모만 됩니다. 한 건 응답은 `{id,title,body}`, 수정 본문은 `{title,body}`입니다. 허용 경로 `GET·POST /api/notes`, `GET·PUT·DELETE /api/notes/:id`는 `aleph.config.json`의 `allowedRoutes`에 있습니다.
+
+DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticated`에서 모두 회수한 뒤 `authenticated`에만 SELECT·INSERT·UPDATE·DELETE를 주고, 행 단위 보안(RLS) 정책으로 `auth.uid() = owner_id`인 행만 허용합니다. 수정 정책은 기존 행과 새 행의 소유자를 모두 확인합니다. 서버 API는 서버 전용 키로 접속하므로 이 정책과 별개로 코드에서 소유자를 비교합니다.
+
+### 4단계 확인 결과 (2026-10-06)
+
+- 정책 적용 전: `anon`과 `authenticated` 모두 `notes` 권한 없음(`role_table_grants`, `has_table_privilege`). 적용 후: `anon`은 권한 없음, `authenticated`는 SELECT·INSERT·UPDATE·DELETE만 남음.
+- DB에서 직접 확인(트랜잭션 안에서 역할과 사용자를 흉내 내고 롤백): A는 자기 메모 4건만, B는 자기 메모 1건만 보임. A가 B의 메모를 수정·삭제하면 0건. A가 메모의 `owner_id`를 B로 바꾸거나 B 소유로 추가하면 정책이 거부함. `anon`은 권한 오류.
+- 앱 API의 A/B 흐름은 가짜 인증과 가짜 DB로 시험했습니다(`test/notes-api.test.mjs`). 실제 로그인 토큰을 보낸 A/B 시험과 `src/attack-check.mjs`의 점검은 로그인 없는 요청만 실행했고, 로그인한 A·B 시험은 미실행입니다.
+
+### 4단계 남은 약점
+
+- 주인 없는 메모(`owner_id`가 비어 있는 시험 자료 한 건)는 아무도 읽을 수 없습니다.
+- 옛 공개 커밋 `93f6d0e`와 옛 배포의 과거 노출은 여전히 해소되지 않았습니다.
+- 서버 전용 키로 접속하는 API는 RLS를 거치지 않으므로, 소유자 비교가 코드에서만 지켜집니다.
