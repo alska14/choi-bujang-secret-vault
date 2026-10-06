@@ -28,7 +28,7 @@
 
 가상 메모는 학습용 Supabase `notes` 테이블에 있고, 화면은 `/api/notes` 서버 함수로 읽습니다. 서버 함수는 `SUPABASE_URL`과 `SUPABASE_SECRET_KEY`를 Vercel 환경변수에서만 읽습니다. `/data.json`과 GitHub 최신 파일에는 메모가 없습니다. 테이블은 RLS를 켰고 `anon`·`authenticated`에 읽기 권한을 주지 않았습니다.
 
-남은 약점: `/api/notes`는 아직 로그인 없이 누구나 부를 수 있는 공개 주소입니다. 로그인과 접근 제한은 3단계에서 붙입니다.
+2단계 시점의 남은 약점: `/api/notes`는 로그인 없이 누구나 부를 수 있는 공개 주소였습니다. 3단계에서 로그인 검사를 붙였습니다.
 
 ### 가상 메모 노출 확인 절차
 
@@ -49,4 +49,27 @@
 ### 남은 약점
 
 - 옛 공개 커밋과 옛 배포에 남은 과거 노출은 해소되지 않았습니다. 이력을 지우거나 옛 배포를 삭제하는 작업은 하지 않았습니다.
-- `/api/notes`는 로그인 없이 가상 메모 네 건을 돌려주는 공개 API입니다. 3단계 로그인 전까지 이 약점이 남습니다.
+- (2단계 시점) `/api/notes`는 로그인 없이 가상 메모 네 건을 돌려주는 공개 API였습니다. 3단계에서 막았습니다.
+
+## 3단계: 진짜 로그인
+
+화면(`public/index.html`)에서 Supabase Auth 이메일·비밀번호로 가입, 로그인, 로그아웃을 합니다. 화면에는 공개용 Project URL과 publishable key만 있고 서버 전용 키는 없습니다. 로그인하면 내 가상 메모를 추가·수정·삭제할 수 있습니다.
+
+서버는 `src/verify-login.mjs`(수정하지 않은 틀 파일)로 요청의 `Authorization: Bearer` 토큰을 검사합니다. 토큰이 없거나 검사에 실패하면 401과 JSON 오류 `{"error":"UNAUTHENTICATED"}`를 돌려주고 자료는 주지 않습니다. 브라우저가 보낸 사용자 ID나 역할은 믿지 않고, 검사로 확인한 사용자 ID만 씁니다. 검사에 쓴 발급자 정보는 `aleph.config.json`의 `identityProvider`에 있습니다(비밀 키 없음).
+
+| 경로 | 동작 |
+|---|---|
+| `GET /api/notes` | 로그인한 사용자의 메모 배열 |
+| `POST /api/notes` | `{id?, title, body}` 추가. `id`는 UUID이며 없으면 서버가 만들어 `{id}`로 돌려줌 |
+| `GET /api/notes/:id` | 한 건 `{id, title, body}`. 지운 뒤에는 404 |
+| `PUT /api/notes/:id` | `{title, body}` 수정 |
+| `DELETE /api/notes/:id` | 삭제(204) |
+
+다시 실행하기: `npm install` 후 `node --test test/notes-api.test.mjs`(가짜 인증·가짜 DB 시험), 배포 후에는 로그인 없이 `/api/notes`를 요청해 401을 확인합니다.
+
+### 3단계 남은 약점
+
+- `GET·PUT·DELETE /api/notes/:id`는 아직 소유자 검사를 하지 않습니다. 로그인한 B가 A의 메모 id를 알면 읽고 고치고 지울 수 있습니다. 4단계에서 `owner_id`를 비교해 막습니다. 목록 `GET /api/notes`만 본인 메모로 거릅니다.
+- 로그인은 신원 확인일 뿐 권한 구분이 없습니다.
+- 옛 공개 커밋 `93f6d0e`와 옛 배포의 과거 노출은 여전히 해소되지 않았습니다.
+- 이 단계의 점검(`src/attack-check.mjs`)은 로그인 없는 요청만 직접 보냈고, 로그인한 A·B 계정 시험은 실행하지 않았습니다.
