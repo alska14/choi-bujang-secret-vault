@@ -61,28 +61,49 @@
     </section>
   </main>
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm';
-    // 아래 두 값은 공개용입니다. 서버 전용 키는 이 파일에 넣지 않습니다.
-    const supabase = createClient('https://eiktrdbkqcksnqoysfcl.supabase.co',
-      'sb_publishable_CLnw1elP11MrB4hOV88pLg_Lwz1sd-Z');
+    // 이 화면에는 Supabase 키가 없습니다. 로그인과 자료 요청은 모두 서버 함수(/api/auth, /api/notes)를 거칩니다.
     const $ = selector => document.querySelector(selector);
     const loginForm = $('#login-form');
     const authMessage = $('#auth-message');
     const memoMessage = $('#memo-message');
     const list = $('#notes');
-    let token = null;
+    const STORE = 'vault.session';
+    let session = null;
+
+    const readStore = () => { try { return JSON.parse(localStorage.getItem(STORE)); } catch { return null; } };
+    const writeStore = value => {
+      try { value ? localStorage.setItem(STORE, JSON.stringify(value)) : localStorage.removeItem(STORE); } catch { /* 저장소를 못 써도 이번 탭에서는 동작 */ }
+    };
+    const post = async (path, payload, token) => {
+      const response = await fetch(path, {
+        method: 'POST', cache: 'no-store', body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw Object.assign(new Error(data?.message ?? `요청 실패 (HTTP ${response.status})`), { status: response.status });
+      return data;
+    };
+    const say = (target, text) => { target.textContent = text; };
 
     const api = async (path, options = {}) => {
+      await freshen();
       const response = await fetch(path, {
         ...options, cache: 'no-store',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' },
       });
       if (response.status === 204) return null;
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.message ?? `요청 실패 (HTTP ${response.status})`);
       return data;
     };
-    const say = (target, text) => { target.textContent = text; };
+    // 만료 1분 전이면 갱신합니다. 갱신에 실패하면 로그아웃 상태로 돌아갑니다.
+    async function freshen() {
+      if (!session || session.expires_at - 60 > Date.now() / 1000) return;
+      try {
+        const data = await post('/api/auth', { action: 'refresh', refresh_token: session.refresh_token });
+        setSession(data.session, false);
+      } catch { setSession(null); throw new Error('다시 로그인해 주세요.'); }
+    }
 
     const render = notes => {
       if (!notes.length) {
@@ -125,47 +146,47 @@
       try { await action(); render(await api('/api/notes')); } catch (error) { say(memoMessage, `실패: ${error.message}`); }
     }
 
-    const show = session => {
-      token = session?.access_token ?? null;
-      loginForm.hidden = Boolean(session);
-      $('#session').hidden = !session;
-      $('#who').textContent = session ? `로그인됨: ${session.user.email}` : '';
-      $('#memo-area').hidden = !session;
-      $('#logged-out').hidden = Boolean(session);
+    function setSession(next, reload = true) {
+      session = next;
+      writeStore(next);
+      loginForm.hidden = Boolean(next);
+      $('#session').hidden = !next;
+      $('#who').textContent = next ? `로그인됨: ${next.email}` : '';
+      $('#memo-area').hidden = !next;
+      $('#logged-out').hidden = Boolean(next);
+      if (!reload) return;
       list.replaceChildren();
       say(memoMessage, '');
-      if (session) run(async () => {});
-    };
+      if (next) run(async () => {});
+    }
     const fail = error => say(authMessage, `실패: ${error.message}`);
+    const credentials = () => ({ email: loginForm.email.value.trim(), password: loginForm.password.value });
 
-    const { data: current } = await supabase.auth.getSession();
-    show(current.session);
-    supabase.auth.onAuthStateChange((event, next) => {
-      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') { token = next?.access_token ?? null; return; }
-      show(next);
-    });
-
+    setSession(readStore());
     loginForm.addEventListener('submit', async event => {
       event.preventDefault();
       say(authMessage, '');
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginForm.email.value.trim(), password: loginForm.password.value });
-      if (error) fail(error); else loginForm.password.value = '';
+      try {
+        const data = await post('/api/auth', { action: 'login', ...credentials() });
+        loginForm.password.value = '';
+        setSession(data.session);
+      } catch (error) { fail(error); }
     });
     $('#signup').addEventListener('click', async () => {
       say(authMessage, '');
       if (!loginForm.reportValidity()) return;
-      const { data, error } = await supabase.auth.signUp({
-        email: loginForm.email.value.trim(), password: loginForm.password.value });
-      if (error) return fail(error);
-      loginForm.password.value = '';
-      say(authMessage, data.session ? '가입되어 로그인했습니다.'
-        : '가입 요청을 보냈습니다. 확인 메일이 필요한 설정이면 로그인되지 않습니다.');
+      try {
+        const data = await post('/api/auth', { action: 'signup', ...credentials() });
+        loginForm.password.value = '';
+        if (data.session) { setSession(data.session); say(authMessage, '가입되어 로그인했습니다.'); }
+        else say(authMessage, '가입 요청을 보냈습니다. 확인 메일이 필요한 설정이면 로그인되지 않습니다.');
+      } catch (error) { fail(error); }
     });
     $('#logout').addEventListener('click', async () => {
       say(authMessage, '');
-      const { error } = await supabase.auth.signOut();
-      if (error) fail(error);
+      const token = session?.access_token;
+      setSession(null);
+      if (token) await post('/api/auth', { action: 'logout', access_token: token }).catch(() => {});
     });
     $('#memo-form').addEventListener('submit', async event => {
       event.preventDefault();

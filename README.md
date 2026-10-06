@@ -91,3 +91,26 @@ DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticate
 - 주인 없는 메모(`owner_id`가 비어 있는 시험 자료 한 건)는 아무도 읽을 수 없습니다.
 - 옛 공개 커밋 `93f6d0e`와 옛 배포의 과거 노출은 여전히 해소되지 않았습니다.
 - 서버 전용 키로 접속하는 API는 RLS를 거치지 않으므로, 소유자 비교가 코드에서만 지켜집니다.
+
+## 5단계: 자료 요청을 서버 한곳으로 모음
+
+브라우저는 Supabase를 직접 부르지 않고 Vercel 서버 함수(`/api/auth`, `/api/notes`)만 부릅니다. 화면 코드(`public/index.html`)에는 Supabase 공개 키(`sb_publishable_…`)도 SDK도 없습니다. 키는 서버 환경변수(`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`)에만 둡니다.
+
+- `/api/auth`(`src/auth-api.mjs`)가 로그인·가입·토큰 갱신·로그아웃을 대신 받습니다. 브라우저에는 `access_token`, `refresh_token`, `expires_at`, `email`만 돌려주고, 이 토큰을 `/api/notes`에 `Authorization: Bearer`로 보냅니다. 서버 함수의 로그인·소유자 검사는 4단계 그대로입니다.
+- `db/revoke-direct.sql`로 `notes` 테이블의 `public·anon·authenticated` 직접 권한을 모두 회수했습니다. 서버 함수는 서버 전용 키(`service_role`)로 접속해 영향이 없습니다. RLS와 정책은 남겨 둔 이중 방어입니다.
+- 쿼리 없는 원본 자료 경로는 `aleph.config.json`의 `originalApiUrl`에 적었습니다.
+
+### 5단계 확인 결과 (2026-10-06)
+
+- 권한 회수 전: `authenticated`에 SELECT·INSERT·UPDATE·DELETE가 있었음. 회수 후: `anon`, `authenticated` 모두 권한 없음, `service_role`은 유지(서버 역할이 6건을 읽음). `role_table_grants`와 `has_table_privilege`로 대조.
+- 공개 키로 원본 REST 경로를 직접 호출하면 HTTP 401 `permission denied for table notes`. 키 없이 호출해도 401.
+- 배포 화면 코드에서 `sb_publishable`, `sb_secret`, SDK 문자열 검색 결과 0건.
+- 배포된 `/api/auth`에 틀린 비밀번호로 로그인을 요청하면 Supabase의 `Invalid login credentials`가 400으로 돌아옴(서버→Supabase 경로 확인). 가입 요청은 계정이 생겨서 보내지 않았습니다.
+- 로그인한 A·B 실제 토큰으로 앱을 쓴 시험은 실행하지 않았습니다(가짜 인증·가짜 DB 시험만 실행).
+
+### 5단계 남은 약점
+
+- 로그인 호출을 서버 함수로 옮긴 것은 화면에서 키를 없애기 위한 변경입니다. `/api/auth`는 로그인 없이 부를 수 있는 공개 주소이고 자체 횟수 제한이 없어, 비밀번호 대입 방어는 Supabase Auth의 기본 제한에 기댑니다.
+- 로그인 토큰은 브라우저 `localStorage`에 저장됩니다. 화면에 스크립트가 주입되면 읽힐 수 있습니다.
+- 주인 없는 메모 한 건, 옛 공개 커밋 `93f6d0e`와 옛 배포의 과거 노출은 그대로입니다.
+- 화면 코드에서 지운 공개 키(`sb_publishable_…`)는 3단계 커밋부터 Git 이력에 남아 있습니다. 공개용 키이고 `notes` 직접 권한을 회수해 쓸 수 없지만, 이력까지 지운 것은 아닙니다. 필요하면 Supabase에서 키를 새로 만들어 교체합니다.

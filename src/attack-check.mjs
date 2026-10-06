@@ -1,7 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
-  if (config.step !== 1 && config.step !== 3 && config.step !== 4) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
+  if (config.step !== 1 && config.step < 3) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   let app;
   try {
     app = new URL(config.publicAppUrl);
@@ -12,7 +12,7 @@ export async function runAttackChecks(config) {
       || app.pathname !== '/' || app.hostname.endsWith('.example')) {
     throw new Error('aleph.config.json의 실제 배포 주소를 먼저 넣어 주세요.');
   }
-  if (config.step >= 3) return anonymousChecks(app);
+  if (config.step >= 3) return anonymousChecks(app, config);
   if (typeof config.sampleMarker !== 'string' || !config.sampleMarker) throw new Error('가상 메모의 확인 표시를 넣어 주세요.');
   const response = await fetch(new URL('/data.json', app), {
     redirect: 'error', signal: AbortSignal.timeout(10000),
@@ -32,7 +32,7 @@ export async function runAttackChecks(config) {
 }
 
 // 3·4단계: 로그인 없이 보낸 실제 요청의 결과만 적습니다. 메모 본문은 기록하지 않습니다.
-async function anonymousChecks(app) {
+async function anonymousChecks(app, config) {
   const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
   const json = async response => { try { return await response.json(); } catch { return null; } };
   const list = await get('/api/notes');
@@ -42,10 +42,29 @@ async function anonymousChecks(app) {
   const data = await get('/data.json');
   const dataBody = data.ok ? await json(data) : null;
   const exposed = Array.isArray(dataBody?.notes) ? dataBody.notes.length : 0;
-  return [
+  const checks = [
     { attackId: 'anonymous_note_list', expected: '로그인 없이 메모 목록을 요청하면 401 또는 403과 JSON 오류',
       observed: rejected ? `거부됨 (HTTP ${list.status}, JSON 오류 문구)` : `거부되지 않음 (HTTP ${list.status})` },
     { attackId: 'public_data_json', expected: '공개 data.json에 가상 메모가 없음',
       observed: `HTTP ${data.status}, 공개 메모 ${exposed}건` },
   ];
+  if (config.step >= 5) checks.push(await originalApiCheck(config, app));
+  return checks;
+}
+
+// 5단계: 공개 키로 원본 자료 주소를 직접 불러 봅니다. 키는 환경변수에서만 읽고 기록하지 않습니다.
+async function originalApiCheck(config, app) {
+  const expected = '공개 키로 원본 자료 주소를 직접 요청하면 메모가 없거나 거부됨';
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+  if (!key) return { attackId: 'original_api_direct', expected, observed: '미실행: SUPABASE_PUBLISHABLE_KEY 환경변수가 없음' };
+  const url = new URL(config.originalApiUrl);
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
+    throw new Error('aleph.config.json의 originalApiUrl을 확인해 주세요.');
+  }
+  const response = await fetch(url, { headers: { apikey: key }, redirect: 'error', signal: AbortSignal.timeout(10000) });
+  let rows = 0;
+  try { const data = await response.json(); rows = Array.isArray(data) ? data.length : 0; } catch { /* JSON 아님 */ }
+  const blocked = !response.ok || rows === 0;
+  return { attackId: 'original_api_direct', expected,
+    observed: blocked ? `직접 요청이 막힘 (HTTP ${response.status}, 메모 ${rows}건)` : `메모가 보임 (HTTP ${response.status}, ${rows}건)` };
 }
