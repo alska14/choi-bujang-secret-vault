@@ -1,0 +1,107 @@
+{
+  "technique": "T1190",
+  "patterns": [
+    {
+      "id": "high-severity",
+      "name": "높은 위험도의 웹 주입 경보",
+      "when": {
+        "minLevel": 10
+      },
+      "evidence": "Wazuh 위험도 10 이상의 웹 접근 경보는 명확한 주입 시도로 봅니다.",
+      "confidence": 0.9
+    },
+    {
+      "id": "repeated-sql",
+      "name": "SQL 구문 반복 주입",
+      "when": {
+        "minCount": 5,
+        "textAny": [
+          "SQL",
+          "데이터베이스 조회",
+          "select"
+        ]
+      },
+      "evidence": "요청 인자 안의 SQL 구문 표기가 같은 주소에서 5번 이상 반복되면 사람이 입력한 검색어가 아닙니다.",
+      "confidence": 0.93
+    },
+    {
+      "id": "repeated-script",
+      "name": "스크립트 태그 반복 삽입",
+      "when": {
+        "minCount": 5,
+        "textAny": [
+          "스크립트 삽입",
+          "스크립트 표식",
+          "스크립트 표기"
+        ]
+      },
+      "evidence": "스크립트 삽입 표기가 5번 이상 반복되면 화면에 코드를 심으려는 시도입니다.",
+      "confidence": 0.93
+    },
+    {
+      "id": "path-traversal",
+      "name": "경로 거슬러 올라가기 반복",
+      "when": {
+        "minCount": 5,
+        "textAny": [
+          "거슬러",
+          "경로 이탈",
+          "../"
+        ]
+      },
+      "evidence": "경로를 위로 거슬러 오르는 표기가 5번 이상 반복되면 다른 폴더의 파일을 읽으려는 시도입니다.",
+      "confidence": 0.92
+    },
+    {
+      "id": "command-separator",
+      "name": "명령 구분자 연속 삽입",
+      "when": {
+        "minCount": 5,
+        "textAny": [
+          "명령 구분자",
+          "명령문"
+        ]
+      },
+      "evidence": "명령 구분자 표기가 연속 요청에 5번 이상 있으면 서버 명령을 이어 붙이려는 시도입니다.",
+      "confidence": 0.9
+    },
+    {
+      "id": "repeated-marker",
+      "name": "주입 표식 반복",
+      "when": {
+        "minCount": 5,
+        "textAny": [
+          "표기",
+          "표식",
+          "구문"
+        ]
+      },
+      "evidence": "주입 표식이 같은 주소에서 5번 이상 반복되면 도구로 대량 시도한 것입니다.",
+      "confidence": 0.88
+    },
+    {
+      "id": "single-marker",
+      "name": "주입처럼 보이는 표기 1건",
+      "when": {
+        "minLevel": 6,
+        "textAny": [
+          "주입",
+          "따옴표",
+          "구분 문자",
+          "이상한 검색"
+        ]
+      },
+      "evidence": "주입처럼 보이지만 반복이 없어 공격이라 단정하기 어렵습니다.",
+      "confidence": 0.6
+    },
+    {
+      "id": "mid-severity",
+      "name": "중간 위험도 경보",
+      "when": {
+        "minLevel": 5
+      },
+      "evidence": "위험도 5~9 경보는 공격이라 단정하긴 어려워 사람이 확인합니다.",
+      "confidence": 0.55
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "schema": "aleph.xdr.blockrules.v1",
+  "note": "차단 후보. 판정기 적용 전 사람이 확인한다.",
+  "rules": [
+    {
+      "action": "deny",
+      "srcip": "203.0.113.10",
+      "evidenceAlertId": "wi-01",
+      "expiresAt": "2026-09-27T01:13:01.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "198.51.100.15",
+      "evidenceAlertId": "wi-03",
+      "expiresAt": "2026-09-27T01:16:04.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "192.0.2.15",
+      "evidenceAlertId": "wi-04",
+      "expiresAt": "2026-09-27T02:02:11.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "203.0.113.18",
+      "evidenceAlertId": "wi-05",
+      "expiresAt": "2026-09-27T02:18:33.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "198.51.100.18",
+      "evidenceAlertId": "wi-06",
+      "expiresAt": "2026-09-27T03:07:08.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "192.0.2.21",
+      "evidenceAlertId": "wi-07",
+      "expiresAt": "2026-09-27T05:04:19.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "203.0.113.22",
+      "evidenceAlertId": "wi-08",
+      "expiresAt": "2026-09-27T06:26:02.000Z"
+    }
+  ]
+}

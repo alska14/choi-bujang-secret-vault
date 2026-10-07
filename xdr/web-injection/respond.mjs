@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { readAlerts } from './read-alerts.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MODULE = 'brute-force';
+const MODULE = 'web-injection';
 const BLOCK_TTL_MS = 60 * 60 * 1000;
 
 // result.json 을 읽어 알림 줄과 차단 후보 규칙을 만든다. 판정기(src/decider.mjs)는 고치지 않는다.
 export async function respond({ root = ROOT } = {}) {
-  const result = JSON.parse(await readFile(join(root, 'xdr', 'brute-force', 'result.json'), 'utf8'));
+  const result = JSON.parse(await readFile(join(root, 'xdr', 'web-injection', 'result.json'), 'utf8'));
   const byId = new Map((await readAlerts()).map((a) => [a.id, a]));
 
   // 같은 주소에서 record(정상) 판정이 나온 적이 있으면 그 주소는 차단 후보에서 뺀다.
@@ -33,7 +33,7 @@ export async function respond({ root = ROOT } = {}) {
 
   await writeFile(join(root, 'xdr', 'alerts.log'), `${lines.join('\n')}\n`, 'utf8');
   const out = { schema: 'aleph.xdr.blockrules.v1', note: '차단 후보. 판정기 적용 전 사람이 확인한다.', rules: [...rules.values()] };
-  await writeFile(join(root, 'xdr', 'brute-force', 'block-rules.json'), `${JSON.stringify(out, null, 2)}\n`, 'utf8');
+  await writeFile(join(root, 'xdr', 'web-injection', 'block-rules.json'), `${JSON.stringify(out, null, 2)}\n`, 'utf8');
   return { alerts: lines.length, rules: out.rules.length };
 }
 
