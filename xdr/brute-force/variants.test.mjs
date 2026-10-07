@@ -63,3 +63,11 @@ test('위험도가 낮은 정상·애매 경보는 block 되지 않음', async (
   assert.notEqual((await decide(mk('로그인 실패 5건 뒤 성공했습니다.', '5', 7))).action, 'block');
   assert.equal((await decide(mk('로그인이 성공했습니다.', undefined, 3))).action, 'record');
 });
+
+test('설명문 필드 이름이 다르거나 건수가 문장에만 있어도 읽는다', async () => {
+  configureJev(null);
+  const alt = { id: 'a', time: '2026-10-01T00:00:00Z', level: 12, full_log: 'sshd: Failed password 로그인 실패 80회', data: { srcip: '203.0.113.9' } };
+  assert.equal((await decide(alt)).action, 'block');
+  assert.equal((await decide({ id: 'b', rule: { level: 11, description: '로그인 시도가 폭주합니다. 비밀번호 실패.' }, data: {} })).action, 'block');
+  assert.equal((await decide({ id: 'c', rule: { level: 12, description: '로그인이 성공했습니다.' }, data: {} })).action, 'record');
+});

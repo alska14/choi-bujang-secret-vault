@@ -6,13 +6,21 @@
       "name": "높은 위험도의 로그인 실패 경보",
       "when": {
         "minLevel": 10,
-        "textAny": [
-          "실패",
-          "비밀번호"
-        ]
+        "notOnlySuccess": true
       },
-      "evidence": "Wazuh 위험도 10 이상이면서 로그인 실패·비밀번호 시도를 말하는 경보는 명확한 공격으로 봅니다.",
+      "evidence": "Wazuh 위험도 10 이상의 로그인 계열 경보는 문구와 상관없이 명확한 공격으로 봅니다. 성공만 알리는 경보는 제외합니다.",
       "confidence": 0.9
+    },
+    {
+      "id": "elevated-burst",
+      "name": "위험도 9 + 반복 실패",
+      "when": {
+        "minLevel": 9,
+        "failure": true,
+        "minCount": 10
+      },
+      "evidence": "위험도 9 이상이면서 실패가 10건 이상 반복되면 공격으로 봅니다.",
+      "confidence": 0.88
     },
     {
       "id": "burst-failures",

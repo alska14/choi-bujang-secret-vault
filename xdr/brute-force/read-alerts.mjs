@@ -7,17 +7,26 @@ const FIXTURE = join(ROOT, 'xdr', 'fixtures', 'brute-force.json');
 
 // 비밀값(비밀번호·토큰·키)처럼 보이는 필드는 처음부터 뽑지 않는다.
 export function summarize(alert) {
-  const n = Number(alert?.data?.count);
+  const a = alert && typeof alert === 'object' ? alert : {};
+  const data = a.data && typeof a.data === 'object' ? a.data : {};
+  // 필드 모양이 조금 달라도 읽도록 설명문 후보를 모아 한 줄로 만든다. 비밀값 필드(password 등)는 쓰지 않는다.
+  const text = [a.rule?.description, a.description, a.full_log, a.message, data.title, data.message]
+    .filter((v) => typeof v === 'string').join(' ');
+  const field = data.count ?? data.failures ?? data.attempts;
+  const fromText = Number((text.match(/(d+)s*(?:건|회|번)/) ?? [])[1]);
+  const n = field !== undefined ? Number(field) : fromText;
+  const accounts = Array.isArray(data.accounts) ? data.accounts.length
+    : typeof data.accounts === 'string' ? data.accounts.split(',').filter(Boolean).length : 0;
   return {
-    id: alert.id,
-    time: alert.timestamp,
-    srcip: alert.data?.srcip ?? '',
-    user: alert.data?.srcuser ?? '',
-    level: Number(alert.rule?.level) || 0,
-    description: alert.rule?.description ?? '',
+    id: a.id,
+    time: a.timestamp ?? a.time ?? '',
+    srcip: data.srcip ?? data.src_ip ?? '',
+    user: data.srcuser ?? data.user ?? '',
+    level: Number(a.rule?.level ?? a.level) || 0,
+    description: text,
     count: Number.isFinite(n) ? n : null,
-    accounts: typeof alert.data?.accounts === 'string' ? alert.data.accounts.split(',').filter(Boolean).length : 0,
-    mitre: alert.rule?.mitre ?? [],
+    accounts,
+    mitre: a.rule?.mitre ?? [],
   };
 }
 
