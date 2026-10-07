@@ -1,0 +1,60 @@
+{
+  "schema": "aleph.xdr.blockrules.v1",
+  "note": "차단 후보. 판정기 적용 전 사람이 확인한다.",
+  "rules": [
+    {
+      "action": "deny",
+      "srcip": "203.0.113.10",
+      "evidenceAlertId": "bf-01",
+      "expiresAt": "2026-09-27T01:12:01.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "198.51.100.20",
+      "evidenceAlertId": "bf-03",
+      "expiresAt": "2026-09-27T01:14:02.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "192.0.2.30",
+      "evidenceAlertId": "bf-04",
+      "expiresAt": "2026-09-27T01:20:11.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "203.0.113.21",
+      "evidenceAlertId": "bf-05",
+      "expiresAt": "2026-09-27T01:21:00.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "198.51.100.44",
+      "evidenceAlertId": "bf-06",
+      "expiresAt": "2026-09-27T03:02:15.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "203.0.113.15",
+      "evidenceAlertId": "bf-07",
+      "expiresAt": "2026-09-27T03:05:40.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "192.0.2.18",
+      "evidenceAlertId": "bf-08",
+      "expiresAt": "2026-09-27T05:10:02.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "198.51.100.8",
+      "evidenceAlertId": "bf-09",
+      "expiresAt": "2026-09-27T06:22:18.000Z"
+    },
+    {
+      "action": "deny",
+      "srcip": "203.0.113.40",
+      "evidenceAlertId": "bf-10",
+      "expiresAt": "2026-09-27T07:40:01.000Z"
+    }
+  ]
+}
