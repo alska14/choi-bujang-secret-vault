@@ -29,8 +29,8 @@
     {
       "alertId": "bf-05",
       "action": "block",
-      "confidence": 0.9,
-      "reason": "계정 다수 동시 시도"
+      "confidence": 0.95,
+      "reason": "단시간 대량 실패"
     },
     {
       "alertId": "bf-06",

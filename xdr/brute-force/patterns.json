@@ -2,44 +2,84 @@
   "technique": "T1110",
   "patterns": [
     {
+      "id": "high-severity",
+      "name": "높은 위험도의 로그인 실패 경보",
+      "when": {
+        "minLevel": 10,
+        "textAny": [
+          "실패",
+          "비밀번호"
+        ]
+      },
+      "evidence": "Wazuh 위험도 10 이상이면서 로그인 실패·비밀번호 시도를 말하는 경보는 명확한 공격으로 봅니다.",
+      "confidence": 0.9
+    },
+    {
       "id": "burst-failures",
       "name": "단시간 대량 실패",
-      "when": { "failure": true, "minCount": 30 },
-      "evidence": "같은 주소·계정에서 짧은 시간에 로그인 실패 30건 이상은 사람이 넣는 양이 아닙니다.",
+      "when": {
+        "failure": true,
+        "minCount": 20
+      },
+      "evidence": "같은 주소·계정에서 짧은 시간에 로그인 실패 20건 이상은 사람이 넣는 양이 아닙니다.",
       "confidence": 0.95
     },
     {
       "id": "password-spraying",
       "name": "여러 계정에 같은 비밀번호",
-      "when": { "textAny": ["같은 비밀번호"] },
+      "when": {
+        "textAny": [
+          "같은 비밀번호"
+        ]
+      },
       "evidence": "한 주소가 여러 계정에 같은 비밀번호를 넣는 것은 비밀번호 스프레이의 전형입니다.",
       "confidence": 0.92
     },
     {
       "id": "many-accounts",
       "name": "계정 다수 동시 시도",
-      "when": { "failure": true, "accountsAtLeast": 10 },
-      "evidence": "계정 10개 이상을 한 번에 시도하면 정상 로그인 실수로 보기 어렵습니다.",
+      "when": {
+        "failure": true,
+        "accountsAtLeast": 5
+      },
+      "evidence": "계정 5개 이상을 한 번에 시도하면 정상 로그인 실수로 보기 어렵습니다.",
       "confidence": 0.9
     },
     {
       "id": "incremental-guess",
       "name": "비밀번호 한 글자씩 변경",
-      "when": { "failure": true, "textAny": ["한 글자씩"] },
+      "when": {
+        "failure": true,
+        "textAny": [
+          "한 글자씩",
+          "사전",
+          "목록을 돌려",
+          "계정 이름을 바꿔"
+        ]
+      },
       "evidence": "비밀번호를 한 글자씩 바꿔 넣는 것은 자동 대입 도구의 모양입니다.",
       "confidence": 0.9
     },
     {
       "id": "fail-then-success",
       "name": "실패 뒤 성공",
-      "when": { "failure": true, "minCount": 4, "textAny": ["성공"] },
+      "when": {
+        "failure": true,
+        "minCount": 4,
+        "textAny": [
+          "성공"
+        ]
+      },
       "evidence": "실패가 이어진 뒤 성공한 것은 뚫렸을 수도, 단순 오타일 수도 있어 사람이 봐야 합니다.",
       "confidence": 0.6
     },
     {
       "id": "low-volume-failures",
       "name": "소량 반복 실패",
-      "when": { "failure": true, "minCount": 3 },
+      "when": {
+        "failure": true,
+        "minCount": 3
+      },
       "evidence": "실패 3건 이상이지만 양이 적어 공격이라 단정하기 어렵습니다.",
       "confidence": 0.55
     }

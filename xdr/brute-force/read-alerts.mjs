@@ -13,9 +13,10 @@ export function summarize(alert) {
     time: alert.timestamp,
     srcip: alert.data?.srcip ?? '',
     user: alert.data?.srcuser ?? '',
-    level: alert.rule?.level ?? 0,
+    level: Number(alert.rule?.level) || 0,
     description: alert.rule?.description ?? '',
     count: Number.isFinite(n) ? n : null,
+    accounts: typeof alert.data?.accounts === 'string' ? alert.data.accounts.split(',').filter(Boolean).length : 0,
     mitre: alert.rule?.mitre ?? [],
   };
 }

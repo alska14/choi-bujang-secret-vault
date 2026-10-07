@@ -25,7 +25,8 @@ function matches(when, a) {
   const failure = a.description.includes('실패');
   if (when.failure !== undefined && when.failure !== failure) return false;
   if (when.minCount !== undefined && !(a.count !== null && a.count >= when.minCount)) return false;
-  if (when.accountsAtLeast !== undefined && accountsMentioned(a.description) < when.accountsAtLeast) return false;
+  if (when.minLevel !== undefined && !(a.level >= when.minLevel)) return false;
+  if (when.accountsAtLeast !== undefined && Math.max(accountsMentioned(a.description), a.accounts) < when.accountsAtLeast) return false;
   if (when.textAny && !when.textAny.some((t) => a.description.includes(t))) return false;
   return true;
 }

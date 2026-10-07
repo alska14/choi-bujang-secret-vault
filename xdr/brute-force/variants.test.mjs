@@ -50,3 +50,16 @@ test('명확한 공격은 Jev 가 낮게 답해도 block 유지', async () => {
   configureJev(async () => 0);
   assert.equal((await decide(mk('로그인 실패 90건이 있고 성공은 없습니다.', '90', 12))).action, 'block');
 });
+
+test('문구·건수가 달라도 위험도 10 이상 로그인 실패 경보는 block', async () => {
+  configureJev(null);
+  assert.equal((await decide(mk('비밀번호 대입 시도가 감지되었습니다. 실패 12건.', '12', 12))).action, 'block');
+  assert.equal((await decide(mk('로그인 실패가 빠르게 반복되고 있습니다.', undefined, '10'))).action, 'block');
+  assert.equal((await decide(mk('계정 6개에 로그인 실패가 이어졌습니다.', '6', 8))).action, 'block');
+});
+
+test('위험도가 낮은 정상·애매 경보는 block 되지 않음', async () => {
+  configureJev(null);
+  assert.notEqual((await decide(mk('로그인 실패 5건 뒤 성공했습니다.', '5', 7))).action, 'block');
+  assert.equal((await decide(mk('로그인이 성공했습니다.', undefined, 3))).action, 'record');
+});
