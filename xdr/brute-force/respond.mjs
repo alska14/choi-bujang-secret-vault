@@ -31,7 +31,11 @@ export async function respond({ root = ROOT } = {}) {
     }
   }
 
-  await writeFile(join(root, 'xdr', 'alerts.log'), `${lines.join('\n')}\n`, 'utf8');
+  // 알림 로그는 모듈들이 함께 쓴다. 이 모듈의 이전 줄만 바꾸고 다른 모듈의 줄은 보존한다.
+  const logPath = join(root, 'xdr', 'alerts.log');
+  const previous = (await readFile(logPath, 'utf8').catch(() => '')).split('\n').filter(Boolean);
+  const keep = previous.filter((l) => l.startsWith('[') && !l.startsWith(`[${MODULE}] `));
+  await writeFile(logPath, `${[...keep, ...lines].join('\n')}\n`, 'utf8');
   const out = { schema: 'aleph.xdr.blockrules.v1', note: '차단 후보. 판정기 적용 전 사람이 확인한다.', rules: [...rules.values()] };
   await writeFile(join(root, 'xdr', 'brute-force', 'block-rules.json'), `${JSON.stringify(out, null, 2)}\n`, 'utf8');
   return { alerts: lines.length, rules: out.rules.length };
