@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { configureJev, decide } from './decide.mjs';
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { PATTERNS, configureJev, decide } from './decide.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 const mk = (description, count, level = 8) => ({
   id: 'v', timestamp: '2026-10-01T00:00:00+09:00',
@@ -69,5 +75,26 @@ test('설명문 필드 이름이 다르거나 건수가 문장에만 있어도 �
   const alt = { id: 'a', time: '2026-10-01T00:00:00Z', level: 12, full_log: 'sshd: Failed password 로그인 실패 80회', data: { srcip: '203.0.113.9' } };
   assert.equal((await decide(alt)).action, 'block');
   assert.equal((await decide({ id: 'b', rule: { level: 11, description: '로그인 시도가 폭주합니다. 비밀번호 실패.' }, data: {} })).action, 'block');
-  assert.equal((await decide({ id: 'c', rule: { level: 12, description: '로그인이 성공했습니다.' }, data: {} })).action, 'record');
+  assert.equal((await decide({ id: 'c', rule: { level: 12, description: '알 수 없는 문구' }, data: {} })).action, 'block');
+  assert.equal((await decide({ id: 'd', rule: { level: 6, description: '알 수 없는 문구' }, data: {} })).action, 'alert');
+});
+
+test('patterns.json 과 decide.mjs 의 패턴 정의가 같다', async () => {
+  const file = JSON.parse(await readFile(join(here, 'patterns.json'), 'utf8'));
+  assert.deepEqual(file.patterns, PATTERNS);
+});
+
+test('decide.mjs 파일 하나만 있어도 동작한다 (격리 환경)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'xdr-iso-'));
+  try {
+    await cp(join(here, 'decide.mjs'), join(dir, 'decide.mjs'));
+    const iso = await import(pathToFileURL(join(dir, 'decide.mjs')).href);
+    iso.configureJev(null);
+    const fixture = JSON.parse(await readFile(join(here, '..', 'fixtures', 'brute-force.json'), 'utf8'));
+    const counts = { block: 0, alert: 0, record: 0 };
+    for (const alert of fixture.alerts) counts[(await iso.decide(alert)).action] += 1;
+    assert.deepEqual(counts, { block: 10, alert: 9, record: 9 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

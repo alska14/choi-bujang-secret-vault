@@ -5,10 +5,9 @@
       "id": "high-severity",
       "name": "높은 위험도의 로그인 실패 경보",
       "when": {
-        "minLevel": 10,
-        "notOnlySuccess": true
+        "minLevel": 10
       },
-      "evidence": "Wazuh 위험도 10 이상의 로그인 계열 경보는 문구와 상관없이 명확한 공격으로 봅니다. 성공만 알리는 경보는 제외합니다.",
+      "evidence": "Wazuh 위험도 10 이상의 로그인 계열 경보는 명확한 공격으로 봅니다.",
       "confidence": 0.9
     },
     {
@@ -89,6 +88,15 @@
         "minCount": 3
       },
       "evidence": "실패 3건 이상이지만 양이 적어 공격이라 단정하기 어렵습니다.",
+      "confidence": 0.55
+    },
+    {
+      "id": "mid-severity",
+      "name": "중간 위험도 경보",
+      "when": {
+        "minLevel": 5
+      },
+      "evidence": "위험도 5~9 경보는 공격이라 단정하긴 어려워 사람이 확인합니다.",
       "confidence": 0.55
     }
   ]
