@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { askJev as callJev } from './jev.mjs';
 import { summarize } from './read-alerts.mjs';
 
 const { patterns } = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'patterns.json'), 'utf8'));
@@ -9,8 +10,8 @@ const BLOCK_AT = 0.85;
 const ALERT_AT = 0.5;
 const JEV_TIMEOUT_MS = 3000;
 
-// Jev 연결점. 기본은 없음 → 애매한 경보는 alert 로 떨어진다. (실행기는 네트워크를 쓰지 않는다)
-let askJev = null;
+// Jev 연결점. 키(TYPESAFE_API_KEY)가 없거나 응답이 없으면 null → 애매한 경보는 alert 로 떨어진다.
+let askJev = callJev;
 export function configureJev(fn) {
   askJev = typeof fn === 'function' ? fn : null;
 }
