@@ -30,7 +30,7 @@ test('필드가 빠진 경보도 오류 없이 record', async () => {
   assert.equal((await decide({ id: 'x', rule: {}, data: {} })).action, 'record');
 });
 
-test('애매한 경보: Jev 없음/오류는 alert, 낮으면 record, 높으면 block', async () => {
+test('애매한 경보: Jev 없음/오류/낮은 값은 alert 유지, 높으면 block', async () => {
   const amb = mk('10분 동안 한 계정의 로그인 실패가 5건입니다.', '5', 6);
   configureJev(null);
   assert.equal((await decide(amb)).action, 'alert');
@@ -39,7 +39,7 @@ test('애매한 경보: Jev 없음/오류는 alert, 낮으면 record, 높으면 
   configureJev(async () => 'abc');
   assert.equal((await decide(amb)).action, 'alert');
   configureJev(async () => 0.1);
-  assert.equal((await decide(amb)).action, 'record');
+  assert.equal((await decide(amb)).action, 'alert');
   configureJev(async () => 0.7);
   assert.equal((await decide(amb)).action, 'alert');
   configureJev(async () => 0.95);

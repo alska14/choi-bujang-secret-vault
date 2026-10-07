@@ -60,8 +60,11 @@ export async function decide(alert) {
   if (confidence < BLOCK_AT) {
     const jev = await jevScore(a, hit);
     if (jev !== null) {
-      confidence = jev;
-      reason = `${hit.name} (Jev 판단)`;
+      // Jev 는 확신도를 올리는 데만 쓴다. 패턴이 이미 잡은 애매한 경보를 record 로 내리지는 않는다.
+      if (jev > confidence) {
+        confidence = jev;
+        reason = `${hit.name} (Jev 판단)`;
+      }
     }
   }
   return { action: toAction(confidence), confidence, reason };
