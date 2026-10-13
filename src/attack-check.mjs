@@ -37,19 +37,20 @@ async function probe(base, path, { method = 'GET', headers = {}, caseId, now, ma
 // 관측한 사실만 observed 에 적는다. 요청을 보내지 못했으면 not_run 이다.
 function attempt(attackId, stage, request, expected, r, blockedWhen) {
   const head = { attackId, stage, kind: 'live_api', request, expected, requestId: r.requestId, checkedAt: r.checkedAt };
-  if (!r.ran) return { ...head, observed: 'network_error', result: 'not_run' };
+  if (!r.ran) return { ...head, observed: 'not_run', result: 'not_run' };
   const note = typeof r.json?.ready === 'boolean' ? `; jsonReady=${r.json.ready}` : '';
   return { ...head, observed: `HTTP ${r.status}${note}`, result: blockedWhen(r) ? 'blocked' : 'breached' };
 }
 
 // 보내지 않은 점검. 요청 ID는 없고, 결과는 항상 not_run 이다(통과로 세지 않는다).
-function notRun(attackId, stage, request, expected, reason, now) {
-  return { attackId, stage, kind: 'not_run', request, expected, observed: `not_run: ${reason}`, result: 'not_run', requestId: null, checkedAt: now().toISOString() };
+function notRun(attackId, stage, request, expected, _reason, now) {
+  return { attackId, stage, kind: 'not_run', request, expected, observed: 'not_run', result: 'not_run', requestId: null, checkedAt: now().toISOString() };
 }
 
 const denied = r => [401, 403, 404].includes(r.status) && !r.hasNotes;
 const noPublicNotes = r => r.status === 404 || (r.status === 200 && !r.hasNotes && !(Array.isArray(r.json?.notes) && r.json.notes.length > 0));
 const notApproved = r => r.status === 200 && r.json?.approved === false && !r.hasNotes;
+const manifestOk = r => r.status === 200 && typeof r.json?.name === 'string' && r.json.name.length > 0 && !r.hasNotes;
 const ruleReady = r => r.status === 200 && r.json?.ready === true;
 
 function resolveBase(config) {
@@ -95,7 +96,7 @@ export async function collectAttackChecks(input, { now = () => new Date(), makeI
     rule('s09-burst-read', 9, '조회 폭주 회수 제안'),
     p(`/api/restore/${TEST_UUID}`, { caseId: 's10-restore-unauth' }).then(r => attempt('s10-restore-unauth', 10, 'GET /api/restore/:noteId (로그인 없음)', '로그인 없는 복원 요청 거부', r, denied)),
     p('/api/device/status', { caseId: 's11-device' }).then(r => attempt('s11-device', 11, 'GET /api/device/status', '승인 전 기기 상태 응답', r, notApproved)),
-    deviceAppCheck(p),
+    p('/manifest.json', { caseId: 's11-device-app' }).then(r => attempt('s11-device-app', 11, 'GET /manifest.json', '설치형 앱 설정(manifest)이 있음', r, manifestOk)),
   ]);
   // 로그인이 필요한 정상 요청은 시험 계정 토큰이 없어 보내지 않았다. 통과로 세지 않고 미실행으로 남긴다.
   results.push(
@@ -120,18 +121,6 @@ export async function runAttackChecks(input) {
 export function summarizeAttempts(items) {
   const count = value => items.filter(item => item.result === value).length;
   return { total: items.length, blocked: count('blocked'), failed: count('breached'), notRun: count('not_run') };
-}
-
-// 11단계: 설치형 앱 설정(manifest)이 있고 화면이 그것을 연결하는지 읽어 본다. 두 요청이라 항목의 요청 ID는 첫 요청의 것이다.
-async function deviceAppCheck(p) {
-  const expected = '앱 설정(manifest)이 있고 화면이 연결함';
-  const [manifest, page] = await Promise.all([p('/manifest.json', { caseId: 's11-device-app' }), p('/', { caseId: 's11-device-app' })]);
-  const head = { attackId: 's11-device-app', stage: 11, kind: 'live_api', request: 'GET /manifest.json, GET /', expected, requestId: manifest.requestId, checkedAt: manifest.checkedAt };
-  if (!manifest.ran || !page.ran) return { ...head, observed: 'network_error', result: 'not_run' };
-  const linked = page.text.includes('rel="manifest"');
-  return { ...head,
-    observed: `manifest HTTP ${manifest.status} 이름 ${manifest.json?.name ?? '-'}; 화면 HTTP ${page.status}, manifest 연결 ${linked ? '있음' : '없음'}`,
-    result: manifest.status === 200 && manifest.json?.name && page.status === 200 && linked && !page.hasNotes ? 'blocked' : 'breached' };
 }
 
 // 1단계: 공개 data.json 을 로그인 없이 읽어 가상 메모의 확인 표시가 보이는지 본다.

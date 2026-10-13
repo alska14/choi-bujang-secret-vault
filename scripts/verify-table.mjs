@@ -13,7 +13,7 @@ import { collectAttackChecks, summarizeAttempts } from '../src/attack-check.mjs'
 export async function loggedInItems({ base, tokenA, tokenB, fetchImpl = fetch, now = () => new Date(), makeId = () => crypto.randomUUID() }) {
   const head = (attackId, stage, request, expected) => ({ attackId, stage, kind: 'live_api', request, expected, requestId: makeId(), checkedAt: now().toISOString() });
   // 요청을 보내지 않은 항목에는 요청 ID를 적지 않는다. 보냈다가 실패한 경우에만 보낸 ID를 남긴다.
-  const skip = (item, reason) => ({ ...item, kind: 'not_run', observed: `not_run: ${reason}`, result: 'not_run',
+  const skip = (item, reason) => ({ ...item, kind: 'not_run', observed: 'not_run', result: 'not_run',
     requestId: reason === '요청을 보내지 못함' ? item.requestId : null });
   const get = async (path, token, item) => {
     try {
