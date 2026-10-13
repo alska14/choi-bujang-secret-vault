@@ -50,6 +50,7 @@ async function anonymousChecks(app, config) {
   ];
   if (config.step >= 5) checks.push(await originalApiCheck(config, app));
   if (config.step >= 6) checks.push(await unregisteredDeviceCheck());
+  if (config.step >= 7) checks.push(await compoundAnomalyCheck());
   return checks;
 }
 
@@ -82,4 +83,18 @@ async function unregisteredDeviceCheck() {
     && registered.decision === 'allow';
   return { attackId: 'unregistered_device', expected,
     observed: `판정기를 직접 실행한 결과(배포 요청 아님): 미등록 ${unregistered.decision}/${unregistered.reasonCode}, 등록 ${registered.decision}${ok ? '' : ' - 기대와 다름'}` };
+}
+
+// 7단계: 판정기를 직접 불러 복합 이상 접속의 가상 요청을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
+async function compoundAnomalyCheck() {
+  const expected = '평소와 다른 신호가 겹친 가상 요청은 step_up, 다시 확인한 뒤와 정상 요청은 allow';
+  const { decide } = await import('./decider.mjs');
+  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
+  const { normal, suspicious } = fixtureRequests();
+  const first = await decide(suspicious);
+  const verified = await decide({ ...suspicious, stepUp: { verified: true, authAgeSeconds: 60 } });
+  const ordinary = await decide(normal);
+  const ok = first.decision === 'step_up' && verified.decision === 'allow' && ordinary.decision === 'allow';
+  return { attackId: 'compound_anomaly', expected,
+    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 복합 이상 ${first.decision}, 재확인 뒤 ${verified.decision}, 정상 ${ordinary.decision}${ok ? '' : ' - 기대와 다름'}` };
 }
