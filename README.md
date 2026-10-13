@@ -117,7 +117,7 @@ DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticate
 
 ## 6단계: 등록된 기기만 자료실에 들어갑니다
 
-`src/decider.mjs`에 규칙 하나 `device_registered`를 추가했습니다. 반 엔진이 확인해 요청에 담아 보내는 `deviceRegistered`가 `true`이고 동작이 `GET`(자료 읽기)일 때만 `allow`(`approved`)합니다. 값이 `false`이거나 없으면 `deny`와 이유 코드 `device_not_registered`로 거부합니다. 그 밖의 요청(등록 기기의 `GET` 아닌 동작 등)은 시작 틀의 기본 거부(`starter.deny`)로 남습니다. 요청에 없는 값(`request.device`, `request.identity` 등)은 쓰지 않았고, 새 키·비밀값은 만들지 않았습니다.
+`src/decider.mjs`에 규칙 하나 `device_registered`를 추가했습니다. 반 엔진이 확인해 요청에 담아 보내는 `deviceRegistered`가 `true`이고 동작이 `GET`(자료 읽기)일 때만 `allow`(이유 코드 `device_registered`)합니다. 값이 `false`이거나 없으면 `deny`와 이유 코드 `device_not_registered`로 거부합니다. 그 밖의 요청(등록 기기의 `GET` 아닌 동작 등)은 시작 틀의 기본 거부(`starter.deny`)로 남습니다. 요청 계약에 없는 값은 쓰지 않았고, 새 키·비밀값은 만들지 않았습니다.
 
 다시 실행하기: `npm run decider:test`를 실행하면 아래 둘이 보여야 합니다.
 

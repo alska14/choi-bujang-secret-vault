@@ -15,7 +15,7 @@ export async function decide(request) {
   // 6단계 device_registered: 엔진이 확인한 deviceRegistered 가 true 일 때만 자료 읽기(GET)를 허용한다.
   // false 이거나 값이 없으면 거부한다. 다른 동작은 아래 기본 거부로 남는다.
   if (request.deviceRegistered !== true) return response('deny', 'device_not_registered', 'device_registered');
-  if (request.method === 'GET') return response('allow', 'approved', 'device_registered');
+  if (request.method === 'GET') return response('allow', 'device_registered', 'device_registered');
 
   return response('deny', 'starter_not_ready', RULE_IDS[0]);
 }
