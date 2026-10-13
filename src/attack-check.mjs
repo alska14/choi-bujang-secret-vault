@@ -52,6 +52,7 @@ async function anonymousChecks(app, config) {
   if (config.step >= 6) checks.push(await unregisteredDeviceCheck());
   if (config.step >= 7) checks.push(await compoundAnomalyCheck());
   if (config.step >= 8) checks.push(await otherZoneCheck());
+  if (config.step >= 9) checks.push(await burstReadCheck());
   return checks;
 }
 
@@ -115,4 +116,20 @@ async function otherZoneCheck() {
   const ok = own.decision === 'allow' && [allNotes, unknown, noticeWrite, noteWrite].every(item => item.decision === 'deny');
   return { attackId: 'other_zone', expected,
     observed: `판정기를 직접 실행한 결과(배포 요청 아님): 내 메모 ${own.decision}, 전체 목록 ${allNotes.decision}, 모르는 경로 ${unknown.decision}, 공지 쓰기 ${noticeWrite.decision}, 메모 수정 ${noteWrite.decision}${ok ? '' : ' - 기대와 다름'}` };
+}
+
+// 9단계: 탐지 함수를 직접 불러 가상 조회 사건을 넣어 봅니다. 배포에 보낸 요청이나 엔진 회수 집행이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
+async function burstReadCheck() {
+  const expected = '같은 사용자의 조회가 10분 안에 121건이면 회수 제안, 120건과 정상 조회는 관찰';
+  const { detect } = await import('./detect.mjs');
+  const start = Date.UTC(2026, 9, 1);
+  const reads = count => Array.from({ length: count }, (_, i) => ({
+    at: new Date(start + i * 2000).toISOString(), method: 'GET', identity: { sub: 'check_user' } }));
+  const burst = detect(reads(121));
+  const edge = detect(reads(120));
+  const normal = detect(reads(30));
+  const ok = burst.action === 'propose_revocation' && burst.reasonCode === 'burst_read'
+    && edge.action === 'observe' && normal.action === 'observe';
+  return { attackId: 'burst_read', expected,
+    observed: `탐지 함수를 직접 실행한 결과(엔진 회수 아님): 121건 ${burst.action}, 120건 ${edge.action}, 정상 30건 ${normal.action}${ok ? '' : ' - 기대와 다름'}` };
 }
