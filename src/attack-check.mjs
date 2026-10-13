@@ -49,6 +49,7 @@ async function anonymousChecks(app, config) {
       observed: `HTTP ${data.status}, 공개 메모 ${exposed}건` },
   ];
   if (config.step >= 5) checks.push(await originalApiCheck(config, app));
+  if (config.step >= 6) checks.push(await unregisteredDeviceCheck());
   return checks;
 }
 
