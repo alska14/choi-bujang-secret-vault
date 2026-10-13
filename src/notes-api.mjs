@@ -97,7 +97,22 @@ export function createNotesApi({ verify, db }) {
     return send(response, 405, { error: 'METHOD_NOT_ALLOWED', message: '허용되지 않는 방법입니다.' });
   });
 
-  return { collection, item };
+  // 8단계 구역 경로. 둘 다 읽기만 받는다. 본인 목록은 확인된 사용자 ID의 행만 돌려준다.
+  const readOnly = response => {
+    response.setHeader('Allow', 'GET');
+    return send(response, 405, { error: 'METHOD_NOT_ALLOWED', message: '허용되지 않는 방법입니다.' });
+  };
+  const myNotes = guard(async (request, response, identity) => {
+    if (request.method !== 'GET') return readOnly(response);
+    return send(response, 200, (await db.list(identity.userId)).map(publicNote));
+  });
+  // 반 공지: 이 앱에는 저장된 공지 자료가 없다. 로그인한 사용자의 읽기에 빈 목록을 돌려주고 쓰기는 받지 않는다.
+  const notices = guard(async (request, response) => {
+    if (request.method !== 'GET') return readOnly(response);
+    return send(response, 200, []);
+  });
+
+  return { collection, item, myNotes, notices };
 }
 
 function supabaseDb(client) {

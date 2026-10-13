@@ -103,7 +103,7 @@ test('실제 aleph.config.json이 틀의 로그인 검사 설정으로 받아들
     judgeKeySet: async () => { throw new Error('unused'); } });
   assert.equal(await verifier(undefined), null);
   assert.equal(await verifier('Bearer a.b.c'), null);
-  assert.ok(config.allowedRoutes.length >= 5);
+  assert.ok(config.allowedRoutes.length >= 4);
 });
 
 // 8단계 제작 3: 화면 메뉴를 거치지 않은 직접 API 요청에서도 다른 구역의 자료가 나오지 않는다.
@@ -128,4 +128,23 @@ test('role·owner 값을 끼워 넣은 직접 API 요청으로도 남의 자료�
   assert.equal(list.body.length, 0);
   assert.deepEqual(db.rows.get(id).title, 'A글');
   assert.equal(db.rows.get(id).owner_id, A);
+});
+
+test('8단계 구역 경로: 본인 목록은 읽기만, 공지는 읽기만 받는다', async () => {
+  const db = fakeDb();
+  const api = createNotesApi({ verify, db });
+  await call(api.collection, { method: 'POST', auth: 'Bearer a', body: { title: 'A글', body: '비밀' } });
+  assert.equal((await call(api.myNotes)).code, 401);
+  assert.equal((await call(api.notices)).code, 401);
+  const mineA = await call(api.myNotes, { auth: 'Bearer a' });
+  assert.equal(mineA.code, 200);
+  assert.equal(mineA.body.length, 1);
+  assert.equal((await call(api.myNotes, { auth: 'Bearer b', query: { owner_id: A, role: 'instructor' } })).body.length, 0);
+  assert.equal((await call(api.myNotes, { method: 'POST', auth: 'Bearer a', body: { title: 'x', body: 'y' } })).code, 405);
+  assert.deepEqual((await call(api.notices, { auth: 'Bearer a' })).body, []);
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    const r = await call(api.notices, { method, auth: 'Bearer a', body: { title: '공지 수정', body: 'x', role: 'instructor' } });
+    assert.equal(r.code, 405, method);
+    assert.equal(r.headers.allow, 'GET');
+  }
 });
