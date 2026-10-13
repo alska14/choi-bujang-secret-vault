@@ -320,3 +320,55 @@ DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticate
 
 시험(`test/device-app.test.mjs`, `test/policy-restore.test.mjs`)은 화면 묶음에 저장소 API와 키처럼 보이는 값이 없는지, 사본에 64자리 16진수가 없는지 확인합니다. 이 변경 뒤 화면에서는 로그인 상태가 새로고침하면 사라집니다. 이 앱은 기기 승인 전에는 메모를 보여 주지 않으므로 사용 경험에는 큰 차이가 없습니다.
 
+## 12단계: 탈환 작전실을 완성합니다
+
+1~11단계를 따로 확인했어도 총공세에서 서로 다른 규칙이 충돌하면 일부 공격이 통과하거나 정상 사용자까지 막힐 수 있습니다. 그래서 판정·탐지·회수·복구의 실제 결과를 한 화면에서 읽는 탈환 작전실을 만들었습니다. 화면의 성공 문구는 통과의 근거가 아닙니다.
+
+### 1) 탈환 작전실 화면 (제작 1)
+
+- 화면: `/ops.html`. 판정기 규칙(개수와 이름), 복구 버전(검증한 정책 사본의 버전·커밋·현재 정책과의 차이), 점검 요약, 정상·금지 요청 표를 보여 줍니다. 수치는 모두 서버 기록 `GET /api/ops`에서 읽어 오고, 서버 값은 `textContent`로만 그립니다. 브라우저 저장소를 쓰지 않습니다. 가상 메모 본문은 표시하지 않습니다.
+- 서버 기록: `api/ops.js`(`src/ops-api.mjs`)가 항목마다 종류를 구분해 돌려줍니다.
+  - `live_api`: 배포 주소에 실제 HTTP 요청을 보내 받은 응답 상태로 판단한 결과입니다.
+  - `code_run`: 판정기·탐지 함수를 가상 요청으로 직접 실행한 결과입니다. 배포에 보낸 요청이 아닙니다.
+  - `not_run`: 실행하지 않은 시험입니다. 통과로 세지 않습니다.
+- 화면의 수치(전체·기대대로·기대와 다름·미실행)는 서버 기록의 `summary`이고, 항목 수와 맞는지 시험합니다(`test/ops.test.mjs`).
+
+### 2) 정상·금지 요청 표 만들기 (제작 2)
+
+`npm run verify:table`이 1~11단계의 정상·금지 요청을 한 표로 만듭니다. 항목마다 **단계, 종류, 요청, 기대 결과, 실제 결과, 요청 ID, 확인 시각, 결과**를 남기고 표를 `artifacts/verify-table.json`(커밋하지 않는 폴더)에도 저장합니다.
+
+- 배포에 보내는 금지 요청(로그인 없는 목록, 엉터리 토큰, 쿼리·헤더에 끼워 넣은 신원, 원본 자료 주소, 공지 수정, 복원, 위조한 기기 승인 헤더 등)은 항상 실행합니다. 요청마다 새 UUID를 `x-request-id` 헤더로 보내고 같은 값을 표에 적습니다.
+- 로그인이 필요한 정상 요청(본인 목록 읽기 허용, B가 A의 메모를 읽으면 거부)은 시험 계정 토큰이 있을 때만 실행합니다. 환경변수 `VERIFY_TOKEN_A`, `VERIFY_TOKEN_B`에 시험 계정의 로그인 토큰을 넣어 실행하며, 읽기 요청만 보내고 토큰과 메모 본문은 출력하거나 저장하지 않습니다. 토큰이 없으면 「미실행」으로 남깁니다.
+- 판정기·탐지 규칙(등록 기기, 복합 이상 접속, 구역, 조회 폭주)은 가상 요청으로 직접 실행하고 종류를 `코드 실행`으로 적습니다.
+- 총공세 41종은 심판이 실행하는 시험이라 이 저장소에서는 「미실행」으로 둡니다. 실행하지 않은 시험을 임의로 통과 처리하지 않습니다.
+
+### 3) 학생 몫과 제공 엔진의 출처 (제작 3)
+
+| 출처 | 들어 있는 것 |
+|---|---|
+| 학생이 만든 것 | 판정기(`src/decider.mjs`), 탐지 규칙(`src/detect.mjs`), 접속 앱 화면(`public/`), 자료실 서버 함수(`api/`, `src/notes-api.mjs`, `src/auth-api.mjs`), 복원(`src/restore-api.mjs`, `scripts/policy-restore.mjs`, `backup/`), 점검 코드(`src/attack-check.mjs`), 탈환 작전실(`public/ops.html`, `api/ops.js`, `src/ops-*.mjs`, `scripts/verify-table.mjs`), XDR 판정(`xdr/brute-force/`, `xdr/web-injection/`), 시험(`test/`) |
+| 시작 틀에서 온 것 | 로그인 검사(`src/verify-login.mjs`), 제출 묶음(`scripts/bundle.mjs`), 빌드(`scripts/build-public.mjs`, `scripts/deployment-identity.mjs`), 연습 시험(`scripts/decider-test.mjs`, `scripts/detect-test.mjs`, `scripts/xdr-run.mjs`), 규칙 문서(`AGENTS.md`, `docs/DECIDER_REQUEST.md`, `docs/DETECT_EVENTS.md`) |
+| 제공 엔진 | **ALEPH SDP 엔진** 사용. 로그인 세션 확인, 기기 등록, 판정기 호출과 집행, 감사 기록 보관, 심판의 총공세를 맡습니다. 이 저장소에는 엔진 코드가 없습니다. |
+| 외부 서비스 | Supabase(DB, 로그인), Vercel(배포), TypeSafe Jev(보너스 판정 보조, 선택) |
+
+비밀값은 이 저장소에 없습니다. 환경변수(이름만): `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`, `TYPESAFE_API_KEY`(선택), `NOTES_BACKUP_JSON`(운영 사본, 선택).
+
+### 설치·실행·중지·복구
+
+모든 절차는 검사한 커밋을 기준으로 합니다. 검사한 커밋은 배포된 `/aleph.json`의 `commit` 값이고, 제출 묶음의 `commit` 값과 같습니다.
+
+1. **설치**: `git clone https://github.com/alska14/choi-bujang-secret-vault`, `git checkout <검사한 커밋>`, `npm install`(Node.js 22 이상).
+2. **실행**: Vercel에 이 저장소를 배포합니다(화면은 `public/`, 서버 함수는 `api/`). 위 환경변수는 Vercel 프로젝트 설정에서 직접 넣습니다.
+3. **점검**: 커밋한 뒤 `npm run verify:table`로 표를 만들고, 커밋하지 않는 `bundle-notes.json`에 이번 단계에서 한 일을 적어 `npm run bundle`을 실행합니다.
+4. **중지**: Vercel 프로젝트에서 배포를 내리거나(Instant Rollback 또는 프로젝트 일시 중지) 엔진 쪽 경로 허용을 끕니다. 복원 경로만 멈추려면 `NOTES_BACKUP_JSON`을 지웁니다(사본이 없으면 복원은 503으로 중단합니다).
+5. **복구**: 검사한 커밋으로 되돌려 다시 배포합니다. 정책은 `npm run policy:diff`로 차이를 보고 `npm run policy:restore -- --apply`로 되돌립니다. 메모 한 건은 `POST /api/restore/:noteId`로 되돌립니다(10단계).
+
+**재현 순서**: ① `npm install` ② `npm run decider:test`와 `npm run detect:test` ③ `node --test test/ops.test.mjs test/decider-zones.test.mjs test/notes-api.test.mjs`(각 시험 파일을 따로 실행) ④ 배포 ⑤ `npm run verify:table` ⑥ 브라우저에서 `/ops.html` 열기 ⑦ `npm run bundle`.
+
+### 12단계 확인 결과와 남은 약점
+
+- 시험(`test/ops.test.mjs` 11개)은 가짜 배포로 점검 로직을 확인합니다. 올바르게 막으면 모두 「기대대로」, 메모가 새면 「기대와 다름」, 요청을 못 보내면 「미실행」으로 남고, 응답 본문과 토큰이 기록에 없습니다.
+- **미실행**: 총공세 41종, 시험 계정 토큰으로 하는 로그인 정상 요청과 B의 접근 거부, 운영 사본으로 하는 복원은 실행하지 못했습니다. 표에도 「미실행」으로 남아 있습니다.
+- 작전실의 「기대대로」는 우리가 정한 기대와 맞는다는 뜻이며 심판 판정이 아닙니다. 판정기·탐지 항목은 가상 요청을 직접 실행한 결과입니다.
+- 작전실 서버 함수는 배포 주소(`publicAppUrl`)에 요청을 보내 확인하므로, 응답이 느리면 일부 항목이 「미실행」이 될 수 있습니다.
+- 11단계에서 화면이 기기를 승인하지 못하는 상태(항상 승인 전)는 그대로입니다.

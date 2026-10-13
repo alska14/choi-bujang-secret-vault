@@ -54,6 +54,7 @@ async function anonymousChecks(app, config) {
   if (config.step >= 8) checks.push(await otherZoneCheck());
   if (config.step >= 9) checks.push(await burstReadCheck());
   if (config.step >= 11) checks.push(await deviceAppCheck(app));
+  if (config.step >= 12) checks.push(await opsScreenCheck(app));
   if (config.step >= 10) {
     checks.push(await restoreUnauthCheck(app));
     checks.push(await policySnapshotCheck());
@@ -187,3 +188,18 @@ async function deviceAppCheck(app) {
   return { attackId: 'device_app', expected,
     observed: `manifest HTTP ${manifestResponse.status} 이름 ${manifest?.name ?? '-'}, 화면 manifest 연결 ${linked ? '있음' : '없음'}, 기기 상태 HTTP ${statusResponse.status} approved=${status?.approved ?? '-'}` };
 }
+
+// 12단계: 실제 배포의 탈환 작전실 화면과 서버 기록(`/api/ops`)을 읽어 봅니다. 응답 본문의 항목 수와 요약이 맞는지만 적고 메모 본문은 기록하지 않습니다.
+async function opsScreenCheck(app) {
+  const expected = '작전실 화면과 서버 기록이 있고, 항목 수와 요약이 서로 맞으며 미실행이 구분됨';
+  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(25000) });
+  const page = await get('/ops.html');
+  const response = await get('/api/ops');
+  let data = null;
+  try { data = response.ok ? await response.json() : null; } catch { /* JSON 아님 */ }
+  const s = data?.summary;
+  const matches = Array.isArray(data?.items) && s?.total === data.items.length && s.asExpected + s.unexpected + s.notRun === s.total;
+  return { attackId: 'ops_screen', expected,
+    observed: `작전실 화면 HTTP ${page.status}, 서버 기록 HTTP ${response.status}, 항목 ${s?.total ?? '-'}개(실제 API ${s?.liveApi ?? '-'}, 코드 실행 ${s?.codeRun ?? '-'}, 미실행 ${s?.notRun ?? '-'}), 기대와 다름 ${s?.unexpected ?? '-'}, 수치 일치 ${matches ? '예' : '아니오'}` };
+}
+

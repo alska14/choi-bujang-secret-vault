@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>탈환 작전실</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #101a28; color: #ecf4ff; }
+    main { max-width: 980px; margin: 0 auto; padding: 36px 22px 64px; }
+    h1 { margin: 8px 0 12px; font-size: clamp(26px, 6vw, 40px); }
+    h2 { margin: 28px 0 10px; font-size: 20px; }
+    p, li { color: #bfd0e5; line-height: 1.7; }
+    .eyebrow { color: #8ad8df; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
+    .box { margin: 14px 0; padding: 16px 18px; border: 1px solid #51667c; border-radius: 14px; background: #1a2a3d; }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 0; }
+    dt { color: #8ad8df; }
+    dd { margin: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #34465a; text-align: left; vertical-align: top; word-break: break-all; }
+    th { color: #8ad8df; font-weight: 600; }
+    .as_expected { color: #9be7a6; }
+    .unexpected { color: #ffb8c4; font-weight: 700; }
+    .not_run { color: #f2d88a; }
+    .scroll { overflow-x: auto; }
+    button { padding: 8px 14px; border: 1px solid #8ad8df; border-radius: 10px; background: transparent; color: #8ad8df; font-size: 15px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">BYTE BACK · 12단계</div>
+    <h1>탈환 작전실</h1>
+    <p>이 화면의 수치는 모두 서버 기록(<code>/api/ops</code>)에서 읽어 옵니다. 성공 문구는 통과의 근거가 아닙니다. 항목마다 실제 API 응답으로 확인한 것, 코드를 직접 실행한 것, 실행하지 않은 것을 구분해 보여 주며 가상 메모 본문은 표시하지 않습니다.</p>
+    <div class="row"><button type="button" id="reload">다시 읽기</button></div>
+    <p id="status" aria-live="polite">서버 기록을 읽는 중입니다.</p>
+
+    <section id="summary" class="box" hidden>
+      <h2>점검 요약</h2>
+      <dl>
+        <dt>전체 항목</dt><dd data-k="total">-</dd>
+        <dt>기대대로</dt><dd data-k="asExpected">-</dd>
+        <dt>기대와 다름</dt><dd data-k="unexpected">-</dd>
+        <dt>미실행</dt><dd data-k="notRun">-</dd>
+        <dt>실제 API 요청</dt><dd data-k="liveApi">-</dd>
+        <dt>코드 직접 실행</dt><dd data-k="codeRun">-</dd>
+      </dl>
+    </section>
+
+    <section id="rules" class="box" hidden>
+      <h2>판정기 규칙</h2>
+      <p id="rules-text"></p>
+    </section>
+
+    <section id="recovery" class="box" hidden>
+      <h2>복구 버전</h2>
+      <p id="recovery-text"></p>
+    </section>
+
+    <section id="items" hidden>
+      <h2>정상·금지 요청 표</h2>
+      <p id="meta"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>단계</th><th>종류</th><th>요청</th><th>기대</th><th>실제</th><th>요청 ID</th><th>확인 시각</th><th>결과</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    // 이 화면은 브라우저 저장소를 쓰지 않고, 서버가 준 값을 textContent 로만 그립니다.
+    const $ = id => document.getElementById(id);
+    const KIND = { live_api: '실제 API', code_run: '코드 실행', not_run: '미실행' };
+    const RESULT = { as_expected: '기대대로', unexpected: '기대와 다름', not_run: '미실행' };
+
+    function render(data) {
+      for (const dd of document.querySelectorAll('#summary dd')) {
+        const value = data.summary?.[dd.dataset.k];
+        dd.textContent = Number.isInteger(value) ? String(value) : '-';
+      }
+      $('summary').hidden = false;
+      $('rules-text').textContent = `규칙 ${data.rules?.count ?? '-'}개: ${(data.rules?.ids ?? []).join(', ')}`;
+      $('rules').hidden = false;
+      const r = data.recovery ?? {};
+      $('recovery-text').textContent = r.valid
+        ? `검증한 정책 사본 있음 · 정책 버전 ${r.policyRevision} · 검증한 커밋 ${r.verifiedCommit} · 현재 정책과의 차이 ${r.changes ?? '확인 못 함'}개`
+        : `정책 사본을 확인하지 못했습니다: ${r.reason ?? '알 수 없음'}`;
+      $('recovery').hidden = false;
+      $('meta').textContent = `확인 시각 ${data.checkedAt ?? '-'} · 배포 커밋 ${data.commit ?? '-'}`;
+      $('rows').replaceChildren(...(data.items ?? []).map(item => {
+        const tr = document.createElement('tr');
+        const cells = [item.stage, KIND[item.kind] ?? item.kind, item.request, item.expected, item.observed,
+          item.requestId ?? '-', item.checkedAt ?? '-', RESULT[item.result] ?? item.result];
+        cells.forEach((text, index) => {
+          const td = document.createElement('td');
+          td.textContent = String(text);
+          if (index === cells.length - 1) td.className = item.result;
+          tr.append(td);
+        });
+        return tr;
+      }));
+      $('items').hidden = false;
+    }
+
+    async function load() {
+      $('status').textContent = '서버 기록을 읽는 중입니다.';
+      try {
+        const response = await fetch('/api/ops', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || data?.schema !== 'aleph.ops.v1') {
+          $('status').textContent = '서버 기록을 읽지 못했습니다. 수치를 표시하지 않습니다.';
+          return;
+        }
+        render(data);
+        $('status').textContent = '서버 기록을 읽었습니다.';
+      } catch {
+        $('status').textContent = '서버에 연결하지 못했습니다. 수치를 표시하지 않습니다.';
+      }
+    }
+    $('reload').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>

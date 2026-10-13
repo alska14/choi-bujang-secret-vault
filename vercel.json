@@ -3,6 +3,11 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "public",
+  "functions": {
+    "api/ops.js": {
+      "includeFiles": "{backup/policy-snapshot.json,src/decider.mjs,src/detect.mjs,aleph.config.json}"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

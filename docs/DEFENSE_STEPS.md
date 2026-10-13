@@ -21,10 +21,11 @@
 | 9 | 탈취된 계정이 조용히 대량 조회해도 모름 | 조회 폭주를 탐지해 권한 회수를 제안 | `src/detect.mjs` |
 | 10 | 침해로 바뀐 메모와 정책을 되돌려야 함 | 검증한 사본으로 정책 복원, 지정한 메모 한 건 복원 | `scripts/policy-restore.mjs`, `src/restore-api.mjs` |
 | 11 | 설치만 했다고 기기를 믿는 앱 | 설치형 자료실 화면과 서버가 정하는 기기 승인 흐름 | `public/manifest.json`, `src/device-api.mjs` |
+| 12 | 규칙 사이의 충돌과 임의의 통과 처리 | 판정·탐지·회수·복구 결과를 한 화면과 표로 모으고 미실행을 구분 | `public/ops.html`, `src/ops-api.mjs` |
 | 보너스 xdr-01 | 무차별 로그인 공격 | 경보를 block·alert·record로 분류 | `xdr/brute-force/` |
 | 보너스 xdr-02 | 웹 주입 공격 | 같은 방식으로 웹 요청 경보 분류 | `xdr/web-injection/` |
 
-12단계와 나머지 보너스(`known-cve`, `persistence`, `privilege`, `exfiltration`)는 아직 하지 않았습니다.
+나머지 보너스(`known-cve`, `persistence`, `privilege`, `exfiltration`)는 아직 하지 않았습니다.
 
 ## 1단계: 일부러 뚫린 출발점
 
