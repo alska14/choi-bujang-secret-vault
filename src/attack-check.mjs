@@ -68,3 +68,17 @@ async function originalApiCheck(config, app) {
   return { attackId: 'original_api_direct', expected,
     observed: blocked ? `직접 요청이 막힘 (HTTP ${response.status}, 메모 ${rows}건)` : `메모가 보임 (HTTP ${response.status}, ${rows}건)` };
 }
+
+// 6단계: 판정기를 직접 불러 미등록 기기의 가상 요청을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
+async function unregisteredDeviceCheck() {
+  const expected = '미등록 기기의 가상 요청은 deny와 device_not_registered로 거부됨';
+  const { decide } = await import('./decider.mjs');
+  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
+  const { normal } = fixtureRequests();
+  const registered = await decide(normal);
+  const unregistered = await decide({ ...normal, deviceRegistered: false });
+  const ok = unregistered.decision === 'deny' && unregistered.reasonCode === 'device_not_registered'
+    && registered.decision === 'allow';
+  return { attackId: 'unregistered_device', expected,
+    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 미등록 ${unregistered.decision}/${unregistered.reasonCode}, 등록 ${registered.decision}${ok ? '' : ' - 기대와 다름'}` };
+}
