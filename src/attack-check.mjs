@@ -51,6 +51,7 @@ async function anonymousChecks(app, config) {
   if (config.step >= 5) checks.push(await originalApiCheck(config, app));
   if (config.step >= 6) checks.push(await unregisteredDeviceCheck());
   if (config.step >= 7) checks.push(await compoundAnomalyCheck());
+  if (config.step >= 8) checks.push(await otherZoneCheck());
   return checks;
 }
 
@@ -97,4 +98,21 @@ async function compoundAnomalyCheck() {
   const ok = first.decision === 'step_up' && verified.decision === 'allow' && ordinary.decision === 'allow';
   return { attackId: 'compound_anomaly', expected,
     observed: `판정기를 직접 실행한 결과(배포 요청 아님): 복합 이상 ${first.decision}, 재확인 뒤 ${verified.decision}, 정상 ${ordinary.decision}${ok ? '' : ' - 기대와 다름'}` };
+}
+
+// 8단계: 판정기를 직접 불러 다른 구역 요청의 가상 사건을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
+async function otherZoneCheck() {
+  const expected = '내 메모 읽기는 allow, 전체 목록·모르는 경로·반 공지 쓰기·메모 수정 가상 요청은 deny';
+  const { decide } = await import('./decider.mjs');
+  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
+  const { normal } = fixtureRequests();
+  const ask = patch => decide({ ...normal, ...patch });
+  const own = await ask({});
+  const allNotes = await ask({ route: 'GET /api/notes' });
+  const unknown = await ask({ route: 'GET /__unknown__' });
+  const noticeWrite = await ask({ method: 'POST', route: 'POST /api/notices' });
+  const noteWrite = await ask({ method: 'PUT', route: 'PUT /api/notes/:id' });
+  const ok = own.decision === 'allow' && [allNotes, unknown, noticeWrite, noteWrite].every(item => item.decision === 'deny');
+  return { attackId: 'other_zone', expected,
+    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 내 메모 ${own.decision}, 전체 목록 ${allNotes.decision}, 모르는 경로 ${unknown.decision}, 공지 쓰기 ${noticeWrite.decision}, 메모 수정 ${noteWrite.decision}${ok ? '' : ' - 기대와 다름'}` };
 }

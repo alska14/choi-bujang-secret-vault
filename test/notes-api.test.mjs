@@ -105,3 +105,27 @@ test('실제 aleph.config.json이 틀의 로그인 검사 설정으로 받아들
   assert.equal(await verifier('Bearer a.b.c'), null);
   assert.ok(config.allowedRoutes.length >= 5);
 });
+
+// 8단계 제작 3: 화면 메뉴를 거치지 않은 직접 API 요청에서도 다른 구역의 자료가 나오지 않는다.
+// 본문·쿼리·헤더에 끼워 넣은 role·owner_id·소유자 값은 읽지 않고, 확인된 사용자 ID와 저장된 owner_id만 비교한다.
+test('role·owner 값을 끼워 넣은 직접 API 요청으로도 남의 자료는 나오지 않는다', async () => {
+  const db = fakeDb();
+  const api = createNotesApi({ verify, db });
+  const { body: { id } } = await call(api.collection, { method: 'POST', auth: 'Bearer a', body: { title: 'A글', body: '비밀' } });
+  const sneaky = { role: 'instructor', owner_id: A, ownerId: A, isInstructor: true };
+  const attempts = [
+    await call(api.item, { auth: 'Bearer b', query: { id, ...sneaky } }),
+    await call(api.item, { method: 'PUT', auth: 'Bearer b', query: { id, ...sneaky }, body: { title: '탈취', body: 'x', ...sneaky } }),
+    await call(api.item, { method: 'DELETE', auth: 'Bearer b', query: { id, ...sneaky } }),
+  ];
+  for (const r of attempts) {
+    assert.equal(r.code, 404);
+    assert.equal(r.body.error, 'NOT_FOUND');
+    assert.ok(!JSON.stringify(r.body).includes('비밀'));
+  }
+  const list = await call(api.collection, { auth: 'Bearer b', query: sneaky });
+  assert.equal(list.code, 200);
+  assert.equal(list.body.length, 0);
+  assert.deepEqual(db.rows.get(id).title, 'A글');
+  assert.equal(db.rows.get(id).owner_id, A);
+});
