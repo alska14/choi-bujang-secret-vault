@@ -112,6 +112,7 @@ test('복구 버전 요약은 검증한 사본을 읽고, 사본이 없으면 �
 test('로그인이 필요한 정상 요청은 토큰이 있을 때만 실행하고 토큰을 남기지 않는다', async () => {
   const none = await loggedInItems({ base: BASE, fetchImpl: goodFetch });
   assert.ok(none.length === 2 && none.every(item => item.result === 'not_run'));
+  assert.ok(none.every(item => item.requestId === null)); // 보내지 않은 요청에는 요청 ID가 없다
   const noteId = '77777777-7777-4777-8777-777777777777';
   const fetchImpl = async (url, options) => {
     const { pathname } = new URL(url);
