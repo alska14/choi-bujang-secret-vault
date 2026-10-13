@@ -53,6 +53,10 @@ async function anonymousChecks(app, config) {
   if (config.step >= 7) checks.push(await compoundAnomalyCheck());
   if (config.step >= 8) checks.push(await otherZoneCheck());
   if (config.step >= 9) checks.push(await burstReadCheck());
+  if (config.step >= 10) {
+    checks.push(await restoreUnauthCheck(app));
+    checks.push(await policySnapshotCheck());
+  }
   return checks;
 }
 
@@ -132,4 +136,37 @@ async function burstReadCheck() {
     && edge.action === 'observe' && normal.action === 'observe';
   return { attackId: 'burst_read', expected,
     observed: `탐지 함수를 직접 실행한 결과(엔진 회수 아님): 121건 ${burst.action}, 120건 ${edge.action}, 정상 30건 ${normal.action}${ok ? '' : ' - 기대와 다름'}` };
+}
+
+// 10단계: 로그인 없이 복원 경로를 부르면 거부되는지 실제 배포에 POST 요청을 보내 봅니다. 사본이나 메모에는 접근하지 못하고 응답 본문은 기록하지 않습니다.
+async function restoreUnauthCheck(app) {
+  const expected = '로그인 없이 복원 경로(POST /api/restore/:noteId)를 부르면 401 또는 403과 JSON 오류';
+  const response = await fetch(new URL('/api/restore/00000000-0000-4000-8000-000000000000', app), {
+    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
+  });
+  let body = null;
+  try { body = await response.json(); } catch { /* JSON 아님 */ }
+  const rejected = [401, 403].includes(response.status) && typeof body?.error === 'string';
+  return { attackId: 'restore_unauth', expected,
+    observed: rejected ? `거부됨 (HTTP ${response.status}, JSON 오류 문구)` : `거부되지 않음 (HTTP ${response.status})` };
+}
+
+// 10단계: 정책 사본(backup/policy-snapshot.json)을 다시 읽어 검증합니다. 코드 실행 결과이며 실제 복원을 실행한 것이 아닙니다.
+async function policySnapshotCheck() {
+  const expected = '복원 전에 정책 사본을 다시 읽어 검증하고, 현재 시험 정책과의 차이를 확인';
+  const { diffPolicy, readCurrentPolicy, verifySnapshot } = await import('../scripts/policy-restore.mjs');
+  const { readFile } = await import('node:fs/promises');
+  const root = new URL('..', import.meta.url);
+  let snapshot;
+  try {
+    snapshot = JSON.parse(await readFile(new URL('backup/policy-snapshot.json', root), 'utf8'));
+  } catch {
+    return { attackId: 'policy_snapshot', expected, observed: '사본이 없거나 읽지 못해 중단 (복원 실행 안 함)' };
+  }
+  const reason = verifySnapshot(snapshot);
+  if (reason) return { attackId: 'policy_snapshot', expected, observed: `사본 검증 실패로 중단 (복원 실행 안 함): ${reason}` };
+  const { fileURLToPath } = await import('node:url');
+  const changes = diffPolicy(snapshot, readCurrentPolicy(fileURLToPath(root)));
+  return { attackId: 'policy_snapshot', expected,
+    observed: `사본 검증 통과(정책 버전 ${snapshot.policyRevision}), 현재 정책과의 차이 ${changes.length}개 (복원 실행 안 함)` };
 }

@@ -1,0 +1,37 @@
+{
+  "schema": "aleph.policy.snapshot.v1",
+  "policyRevision": 9,
+  "verifiedCommit": "243b31ad2e9012f0b8011a8dbd76511049763074",
+  "note": "침해 전에 검증한 안전 정책 사본. 비밀값과 메모 내용은 없습니다.",
+  "allowedRoutes": [
+    {
+      "service": "notes",
+      "method": "GET",
+      "pathPattern": "/api/my/notes",
+      "zone": "my-notes"
+    },
+    {
+      "service": "notes",
+      "method": "GET",
+      "pathPattern": "/notes/:id",
+      "zone": "my-notes"
+    },
+    {
+      "service": "notes",
+      "method": "GET",
+      "pathPattern": "/api/notes/:id",
+      "zone": "my-notes"
+    },
+    {
+      "service": "notices",
+      "method": "GET",
+      "pathPattern": "/api/notices",
+      "zone": "class-notices"
+    }
+  ],
+  "files": {
+    "src/decider.mjs": "2f30425c892ece40a43b9a05630dfbca95d08ccf33471c0b2420ebe194aa9afe",
+    "src/detect.mjs": "503b52c89937b25bfb9840d3101583e3d52633371294b5fe3317c4b841f8a766"
+  },
+  "sha256": "b0a2d06a62fe2f5c306378fa9052aec0fd73f6872b590c5aa4a2eb7a624d775c"
+}

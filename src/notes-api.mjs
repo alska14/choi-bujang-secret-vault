@@ -153,19 +153,26 @@ function supabaseDb(client) {
   };
 }
 
-let runtime;
+let deps;
 // 서버 전용 키는 환경변수에서만 읽고 응답·로그에 넣지 않습니다.
-export function getNotesApi() {
-  if (!runtime) {
+// 로그인 검사와 DB 연결은 자료 API와 복원 API(src/restore-api.mjs)가 함께 씁니다.
+export function getNotesDeps() {
+  if (!deps) {
     const secretKey = process.env.SUPABASE_SECRET_KEY;
     const url = process.env.SUPABASE_URL;
     const client = createClient(url, secretKey, {
       auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
     });
-    runtime = createNotesApi({
+    deps = {
       verify: createLoginVerifier({ config, supabaseSecretKey: secretKey }),
       db: supabaseDb(client),
-    });
+    };
   }
+  return deps;
+}
+
+let runtime;
+export function getNotesApi() {
+  if (!runtime) runtime = createNotesApi(getNotesDeps());
   return runtime;
 }

@@ -8,3 +8,5 @@ public/aleph.json
 .env*
 *.local.sql
 supabase/.temp/
+backup/*.local.json
+backup/notes*.json

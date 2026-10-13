@@ -10,7 +10,10 @@
     "decider:test": "node scripts/decider-test.mjs",
     "detect:test": "node scripts/detect-test.mjs",
     "fixture:7": "node scripts/fixture-7.mjs",
-    "xdr:run": "node scripts/xdr-run.mjs"
+    "xdr:run": "node scripts/xdr-run.mjs",
+    "policy:diff": "node scripts/policy-restore.mjs diff",
+    "policy:restore": "node scripts/policy-restore.mjs restore",
+    "policy:snapshot": "node scripts/policy-restore.mjs snapshot"
   },
   "engines": {
     "node": ">=22"
