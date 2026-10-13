@@ -35,6 +35,11 @@ export async function runAttackChecks(config) {
 async function anonymousChecks(app, config) {
   const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
   const json = async response => { try { return await response.json(); } catch { return null; } };
+  // 10~12단계의 실제 요청 점검은 서로 기다리지 않도록 먼저 한꺼번에 시작한다(응답이 느려도 전체 대기가 길어지지 않게).
+  // 각 점검은 내부에서 네트워크 오류를 잡아 「미실행」으로 남기므로 여기서 거부(reject)되지 않는다.
+  const restoreTask = config.step >= 10 ? restoreUnauthCheck(app) : null;
+  const deviceTask = config.step >= 11 ? deviceAppCheck(app) : null;
+  const opsTask = config.step >= 12 ? opsScreenCheck(app) : null;
   const list = await get('/api/notes');
   const listBody = await json(list);
   const rejected = [401, 403].includes(list.status) && typeof listBody?.error === 'string'
@@ -53,10 +58,10 @@ async function anonymousChecks(app, config) {
   if (config.step >= 7) checks.push(await compoundAnomalyCheck());
   if (config.step >= 8) checks.push(await otherZoneCheck());
   if (config.step >= 9) checks.push(await burstReadCheck());
-  if (config.step >= 11) checks.push(await deviceAppCheck(app));
-  if (config.step >= 12) checks.push(await opsScreenCheck(app));
+  if (deviceTask) checks.push(await deviceTask);
+  if (opsTask) checks.push(await opsTask);
   if (config.step >= 10) {
-    checks.push(await restoreUnauthCheck(app));
+    checks.push(await restoreTask);
     checks.push(await policySnapshotCheck());
   }
   return checks;
@@ -143,9 +148,14 @@ async function burstReadCheck() {
 // 10단계: 로그인 없이 복원 경로를 부르면 거부되는지 실제 배포에 POST 요청을 보내 봅니다. 사본이나 메모에는 접근하지 못하고 응답 본문은 기록하지 않습니다.
 async function restoreUnauthCheck(app) {
   const expected = '로그인 없이 복원 경로(POST /api/restore/:noteId)를 부르면 401 또는 403과 JSON 오류';
-  const response = await fetch(new URL('/api/restore/00000000-0000-4000-8000-000000000000', app), {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000),
-  });
+  let response;
+  try {
+    response = await fetch(new URL('/api/restore/00000000-0000-4000-8000-000000000000', app), {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return { attackId: 'restore_unauth', expected, observed: '요청을 보내지 못해 미실행' };
+  }
   let body = null;
   try { body = await response.json(); } catch { /* JSON 아님 */ }
   const rejected = [401, 403].includes(response.status) && typeof body?.error === 'string';
@@ -176,13 +186,16 @@ async function policySnapshotCheck() {
 // 11단계: 실제 배포의 설치형 앱 설정과 기기 승인 상태를 읽어 봅니다. 승인 여부는 서버 응답만 적고 메모 내용은 기록하지 않습니다.
 async function deviceAppCheck(app) {
   const expected = '앱 설정(manifest)이 있고, 서버는 이 기기를 승인 전으로 답하며, 화면 HTML에는 메모가 없음';
-  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
+  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(8000) });
   const json = async response => { try { return await response.json(); } catch { return null; } };
-  const manifestResponse = await get('/manifest.json');
+  let manifestResponse; let statusResponse; let page;
+  try {
+    [manifestResponse, statusResponse, page] = await Promise.all([get('/manifest.json'), get('/api/device/status'), get('/')]);
+  } catch {
+    return { attackId: 'device_app', expected, observed: '요청을 보내지 못해 미실행' };
+  }
   const manifest = manifestResponse.ok ? await json(manifestResponse) : null;
-  const statusResponse = await get('/api/device/status');
   const status = statusResponse.ok ? await json(statusResponse) : null;
-  const page = await get('/');
   const html = page.ok ? await page.text() : '';
   const linked = html.includes('rel="manifest"');
   return { attackId: 'device_app', expected,
@@ -192,9 +205,14 @@ async function deviceAppCheck(app) {
 // 12단계: 실제 배포의 탈환 작전실 화면과 서버 기록(`/api/ops`)을 읽어 봅니다. 응답 본문의 항목 수와 요약이 맞는지만 적고 메모 본문은 기록하지 않습니다.
 async function opsScreenCheck(app) {
   const expected = '작전실 화면과 서버 기록이 있고, 항목 수와 요약이 서로 맞으며 미실행이 구분됨';
-  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(25000) });
-  const page = await get('/ops.html');
-  const response = await get('/api/ops');
+  // /api/ops 는 서버가 여러 요청을 보내 확인하므로 조금 더 기다리되, 두 요청을 동시에 보내 전체 대기를 15초 안으로 묶는다.
+  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(15000) });
+  let page; let response;
+  try {
+    [page, response] = await Promise.all([get('/ops.html'), get('/api/ops')]);
+  } catch {
+    return { attackId: 'ops_screen', expected, observed: '요청을 보내지 못해 미실행' };
+  }
   let data = null;
   try { data = response.ok ? await response.json() : null; } catch { /* JSON 아님 */ }
   const s = data?.summary;
