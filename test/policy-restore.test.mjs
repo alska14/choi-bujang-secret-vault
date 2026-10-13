@@ -72,3 +72,10 @@ test('저장소에 있는 정책 사본은 검증을 통과하고 비밀값이 �
   assert.ok(!/sb_secret|BEGIN [A-Z ]*PRIVATE|Bearer\s|eyJ[A-Za-z0-9_-]{12}/u.test(JSON.stringify(stored)));
   assert.ok(readCurrentPolicy(root).files['src/decider.mjs']);
 });
+
+test('저장소의 정책 사본에는 64자리 연속 16진수(키처럼 보이는 값)가 없다', () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const raw = readFileSync(join(root, 'backup', 'policy-snapshot.json'), 'utf8');
+  assert.ok(!/[0-9a-fA-F]{64,}/u.test(raw)); // 40자리 커밋 번호는 키가 아니므로 허용한다
+  assert.match(fileHash('x'), /^[0-9a-f]{8}(?:-[0-9a-f]{8}){7}$/u);
+});

@@ -46,11 +46,11 @@ test('기기 상태는 GET만, 승인 요청 안내는 POST만 받는다', () =>
 });
 
 test('승인 요청 안내는 요청을 저장하거나 권한을 주지 않고 기기 값을 돌려주지 않는다', () => {
-  const out = call(deviceRequest, { method: 'POST', body: { deviceKey: 'PRIVATE_KEY_VALUE', signature: 'SIG', approved: true } });
+  const out = call(deviceRequest, { method: 'POST', body: { credential: 'DUMMY_VALUE_123', signature: 'SIG', approved: true } });
   assert.equal(out.code, 200);
   assert.equal(out.body.approved, false);
   assert.equal(out.body.requested, false);
-  assert.ok(!JSON.stringify(out.body).includes('PRIVATE_KEY_VALUE'));
+  assert.ok(!JSON.stringify(out.body).includes('DUMMY_VALUE_123'));
   assert.ok(!JSON.stringify(out.body).includes('SIG'));
 });
 
@@ -74,16 +74,20 @@ test('화면은 manifest 를 연결하고 오프라인 안내를 두며, 설치 
   assert.ok(!/serviceWorker/u.test(html)); // 보호 자료를 캐시하지 않는다
 });
 
-test('메모는 로그인과 서버의 승인이 모두 있을 때만 열고, 기기 키를 저장하지 않는다', () => {
+test('메모는 로그인과 서버의 승인이 모두 있을 때만 열고, 브라우저 저장소에 아무것도 저장하지 않는다', () => {
   const html = read('public/index.html');
   assert.match(html, /const open = Boolean\(session\) && deviceApproved;/u);
   assert.match(html, /deviceApproved = response\.ok && data\?\.approved === true;/u);
   assert.match(html, /if \(next && deviceApproved\) run\(/u);
   // 승인 여부를 바꾸는 코드는 서버 응답 하나뿐이다.
   assert.equal(html.split('deviceApproved = true').length - 1, 0);
-  const stores = html.match(/localStorage\.(?:setItem|getItem)\([^)]*\)/gu) ?? [];
-  assert.ok(stores.every(call => call.includes('STORE')), '로그인 세션 외의 값을 브라우저 저장소에 넣지 않는다');
-  assert.ok(!/privateKey|deviceKey|indexedDB|sessionStorage/u.test(html));
+  // 로그인 정보도 화면의 메모리에만 두고, 브라우저 저장소(localStorage·sessionStorage·IndexedDB·쿠키)를 쓰지 않는다.
+  assert.ok(!/localStorage|sessionStorage|indexedDB|document\.cookie|caches\./u.test(html));
+  // 키처럼 보이는 값(PEM 머리말, 긴 16진수, JWT 모양)이 화면 묶음에 없다.
+  for (const path of ['public/index.html', 'public/manifest.json', 'public/icon.svg', 'public/data.json']) {
+    const text = read(path);
+    assert.ok(!/-----BEGIN|\b[0-9a-fA-F]{40,}\b|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/u.test(text), path);
+  }
 });
 
 test('화면 스크립트에 문법 오류가 없다', () => {

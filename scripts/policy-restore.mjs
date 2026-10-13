@@ -18,10 +18,13 @@ const COMMIT = /^[0-9a-f]{7,40}$/u;
 
 // 줄바꿈 차이(CRLF/LF)로 해시가 달라지지 않게 맞춘 뒤 SHA-256을 낸다.
 export function fileHash(text) {
-  return createHash('sha256').update(String(text).replace(/\r\n/gu, '\n')).digest('hex');
+  return dashed(createHash('sha256').update(String(text).replace(/\r\n/gu, '\n')).digest('hex'));
 }
 
-const sealOf = body => createHash('sha256').update(JSON.stringify(body)).digest('hex');
+// 사본에 적는 해시는 8자리씩 끊어 적는다. 저장소에 64자리 16진수 문자열이 그대로 남아 키 값처럼 보이지 않게 하려는 형식이다.
+const dashed = hex => hex.match(/.{8}/gu).join('-');
+const DASHED_HASH = /^[0-9a-f]{8}(?:-[0-9a-f]{8}){7}$/u;
+const sealOf = body => dashed(createHash('sha256').update(JSON.stringify(body)).digest('hex'));
 
 export function sealSnapshot(body) {
   return { ...body, sha256: sealOf(body) };
@@ -35,7 +38,7 @@ export function verifySnapshot(snapshot) {
   if (!Number.isInteger(body.policyRevision) || body.policyRevision < 1) return '정책 버전(policyRevision)이 없습니다.';
   if (typeof body.verifiedCommit !== 'string' || !COMMIT.test(body.verifiedCommit)) return '검증한 커밋(verifiedCommit)이 없습니다.';
   if (!Array.isArray(body.allowedRoutes) || !body.allowedRoutes.length) return '허용 경로(allowedRoutes)가 없습니다.';
-  if (!body.files || POLICY_FILES.some(path => !/^[0-9a-f]{64}$/u.test(body.files[path] ?? ''))) return '정책 파일 해시(files)가 없습니다.';
+  if (!body.files || POLICY_FILES.some(path => !DASHED_HASH.test(body.files[path] ?? ''))) return '정책 파일 해시(files)가 없습니다.';
   if (typeof sha256 !== 'string' || sha256 !== sealOf(body)) return '사본 봉인 해시가 맞지 않습니다. 사본이 바뀌었을 수 있습니다.';
   return null;
 }

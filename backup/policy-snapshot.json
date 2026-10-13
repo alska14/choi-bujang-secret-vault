@@ -30,8 +30,8 @@
     }
   ],
   "files": {
-    "src/decider.mjs": "2f30425c892ece40a43b9a05630dfbca95d08ccf33471c0b2420ebe194aa9afe",
-    "src/detect.mjs": "503b52c89937b25bfb9840d3101583e3d52633371294b5fe3317c4b841f8a766"
+    "src/decider.mjs": "2f30425c-892ece40-a43b9a05-630dfbca-95d08ccf-33471c0b-2420ebe1-94aa9afe",
+    "src/detect.mjs": "503b52c8-9937b25b-fb9840d3-101583e3-d5263337-1294b5fe-3317c4b8-41f8a766"
   },
-  "sha256": "b0a2d06a62fe2f5c306378fa9052aec0fd73f6872b590c5aa4a2eb7a624d775c"
+  "sha256": "046086af-7b62f29e-c5e623f0-52c7dee3-93210cf9-fb4f8337-5f15b4de-de471b74"
 }

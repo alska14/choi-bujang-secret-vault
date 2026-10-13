@@ -80,14 +80,9 @@
     const authMessage = $('#auth-message');
     const memoMessage = $('#memo-message');
     const list = $('#notes');
-    const STORE = 'vault.session';
     let session = null;
     let deviceApproved = false; // 서버가 승인했다고 답할 때만 true. 버튼이나 설치 표시로는 바뀌지 않습니다.
 
-    const readStore = () => { try { return JSON.parse(localStorage.getItem(STORE)); } catch { return null; } };
-    const writeStore = value => {
-      try { value ? localStorage.setItem(STORE, JSON.stringify(value)) : localStorage.removeItem(STORE); } catch { /* 저장소를 못 써도 이번 탭에서는 동작 */ }
-    };
     const post = async (path, payload, token) => {
       const response = await fetch(path, {
         method: 'POST', cache: 'no-store', body: JSON.stringify(payload),
@@ -162,7 +157,6 @@
 
     function setSession(next, reload = true) {
       session = next;
-      writeStore(next);
       loginForm.hidden = Boolean(next);
       $('#session').hidden = !next;
       $('#who').textContent = next ? `로그인됨: ${next.email}` : '';
@@ -183,7 +177,7 @@
       if (!open) list.replaceChildren();
       return open;
     }
-    // 기기 키·서명·토큰은 이 화면의 저장소에 두지 않습니다. 승인 여부는 서버 응답으로만 알립니다.
+    // 승인 여부는 서버 응답으로만 알립니다. 로그인 정보는 이 화면의 메모리에만 두고 브라우저 저장소에는 저장하지 않습니다.
     async function loadDevice() {
       try {
         const response = await fetch('/api/device/status', { cache: 'no-store' });
@@ -208,7 +202,7 @@
       } catch { say($('#device-state'), '서버에 연결하지 못했습니다.'); }
     });
 
-    setSession(readStore());
+    setSession(null);
     loadDevice();
     loginForm.addEventListener('submit', async event => {
       event.preventDefault();
