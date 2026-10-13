@@ -25,6 +25,7 @@
 | 보너스 xdr-01 | 무차별 로그인 공격 | 경보를 block·alert·record로 분류 | `xdr/brute-force/` |
 | 보너스 xdr-02 | 웹 주입 공격 | 같은 방식으로 웹 요청 경보 분류 | `xdr/web-injection/` |
 | 보너스 xdr-03 | 알려진 취약점(CVE) 악용 | 경보를 block·alert·record 로 분류, Jev 없이 단독 판정 | `xdr/known-cve/` |
+| 보너스 xdr-04 | 몰래 심어진 프로그램(지속성) | 경보를 block·alert·record 로 분류, Jev 없이 단독 판정 | `xdr/persistence/` |
 
 나머지 보너스(`known-cve`, `persistence`, `privilege`, `exfiltration`)는 아직 하지 않았습니다.
 
@@ -130,6 +131,10 @@
 ## 보너스 xdr-03: 알려진 취약점 악용
 
 같은 구조로 경보 24건을 분류합니다. 결과는 block 8, alert 8, record 8입니다. 이번에는 Jev를 쓰지 않고 `decide.mjs`가 import 문 없이 혼자 계산합니다. 패턴은 jndi 형태의 원격 조회 구문(머리글·인자)과 점검 도구의 흔적이며(MITRE T1190), 조회 구문은 찾기만 하고 로그·결과에 담지 않습니다. 자세한 풀이는 [docs/steps/xdr-03.md](steps/xdr-03.md)에 있습니다.
+
+## 보너스 xdr-04: 몰래 심어진 프로그램
+
+같은 구조로 경보 24건을 분류합니다. 결과는 block 8, alert 8, record 8입니다. xdr-03처럼 Jev 없이 `decide.mjs`가 import 문 없이 혼자 계산합니다. 패턴은 서명 없는 새 서비스, 낯선 예약 작업, 시작 폴더 변경이며(MITRE T1543, T1053), "서명된 채로"라는 정상 경보와 "서명은 확인되지 않았습니다"라는 애매한 경보를 구분하는 것이 핵심이었습니다. 자세한 풀이는 [docs/steps/xdr-04.md](steps/xdr-04.md)에 있습니다.
 
 ## 이 과정에서 배운 것
 
