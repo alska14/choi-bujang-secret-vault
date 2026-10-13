@@ -36,30 +36,30 @@ BYTE BACK 방어전 시작 틀에서 출발해 1~12단계와 XDR 보너스 6개�
 
 ### 실측 결과
 
-측정일은 2026-10-13이고, 측정에 쓴 배포 커밋은 681693f 입니다. 배포 주소에 npm run verify:table 로 실제 읽기 요청을 보내 얻은 응답입니다.
+측정일은 2026-10-13이고, 측정에 쓴 배포 커밋은 f444898 입니다. 배포 주소에 npm run verify:table 로 실제 읽기 요청을 보내 얻은 응답입니다.
 
 | 단계 | 종류 | 요청 | 기대 | 실제 | 요청 ID | 확인 시각 | 결과 |
 |---|---|---|---|---|---|---|---|
-| 1 | 실제 API | GET /data.json | /data.json 에 메모가 없음 | HTTP 200 | 21da4a18-4d8e-4f39-84bf-6281d985a8cb | 2026-10-13T03:57:34.795Z | 막음 |
-| 2 | 실제 API | GET /notes.json | 다른 정적 사본 없음 | HTTP 404 | c5f6ad21-bd4f-4d8a-907b-e361495aa581 | 2026-10-13T03:57:34.820Z | 막음 |
-| 3 | 실제 API | GET /api/my/notes (로그인 없음) | 로그인 없는 목록 401 | HTTP 401 | 88faa4ba-44bf-4e85-ab27-5bc28a00c189 | 2026-10-13T03:57:34.821Z | 막음 |
-| 3 | 실제 API | GET /api/my/notes (엉터리 토큰) | 위조 토큰 401 | HTTP 401 | 7b6594c3-3e89-48c3-bcf3-d778e946a10c | 2026-10-13T03:57:34.821Z | 막음 |
-| 3 | 미실행 | GET /api/notes (A 로그인) | 정상 요청 허용(200)과 본인 목록 | not_run: 시험 계정 A 토큰 없음 | - | 2026-10-13T03:57:35.104Z | 미실행 |
-| 4 | 실제 API | GET /api/my/notes (쿼리에 사용자·역할) | 쿼리 신원 무시 | HTTP 401 | c489eb3b-8595-4728-8014-cc34556c85d4 | 2026-10-13T03:57:34.821Z | 막음 |
-| 4 | 실제 API | GET /api/my/notes (헤더에 사용자·역할) | 헤더 신원 무시 | HTTP 401 | e0e83e87-142a-4134-9779-e7d1cfb0bff1 | 2026-10-13T03:57:34.822Z | 막음 |
-| 4 | 미실행 | GET /api/notes/:id (B 로그인, A의 메모) | 거부(404) | not_run: 시험 계정 A·B 토큰 없음 | - | 2026-10-13T03:57:35.104Z | 미실행 |
-| 5 | 실제 API | GET /rest/v1/notes | 원본 주소 직접 읽기 거부 | HTTP 404 | 9b3c05ea-51ad-4293-b7f5-5230bc30a2c1 | 2026-10-13T03:57:34.822Z | 막음 |
-| 6 | 실제 API | GET /api/checks?case=s06-unregistered | 미등록 기기 거부 | HTTP 200; jsonReady=true | da955ccb-5589-4a8f-98ee-41702a40e0be | 2026-10-13T03:57:34.823Z | 막음 |
-| 7 | 실제 API | GET /api/checks?case=s07-compound | 복합 이상 재확인 | HTTP 200; jsonReady=true | 42667220-198c-46c6-a5c0-2d02a255c810 | 2026-10-13T03:57:34.823Z | 막음 |
-| 8 | 실제 API | GET /api/checks?case=s08-unknown-route | 모르는 경로 거부 | HTTP 200; jsonReady=true | a7cb4b89-d6d3-4c8c-8992-dca0ffb7b3c0 | 2026-10-13T03:57:34.824Z | 막음 |
-| 8 | 실제 API | GET /api/checks?case=s08-all-notes | 전체 메모 목록 거부 | HTTP 200; jsonReady=true | 1431ce05-68d2-4ce9-8a79-20ee8823ccc9 | 2026-10-13T03:57:34.824Z | 막음 |
-| 8 | 실제 API | GET /api/checks?case=s08-write-notice | 반 공지 쓰기 거부 | HTTP 200; jsonReady=true | e39b261f-a273-42f1-885b-1d3609c8ab32 | 2026-10-13T03:57:34.824Z | 막음 |
-| 8 | 실제 API | GET /api/checks?case=s08-own-note | 등록 기기의 내 메모 읽기 허용 | HTTP 200; jsonReady=true | fd66059d-ee8c-49d3-a4ad-e3ed488437f4 | 2026-10-13T03:57:34.825Z | 막음 |
-| 8 | 실제 API | GET /api/notices (로그인 없음) | 반 공지 로그인 없이 거부 | HTTP 401 | 02d7fe53-46d6-40e0-8b76-2b0e4712cacd | 2026-10-13T03:57:34.825Z | 막음 |
-| 9 | 실제 API | GET /api/checks?case=s09-burst-read | 조회 폭주 회수 제안 | HTTP 200; jsonReady=true | 6a30991b-ed61-48f9-aa5e-a5f7d0d3ae7c | 2026-10-13T03:57:34.825Z | 막음 |
-| 10 | 실제 API | GET /api/restore/:noteId (로그인 없음) | 로그인 없는 복원 요청 거부 | HTTP 401 | 7b33929f-2404-491d-8abb-a9d2b35cef9e | 2026-10-13T03:57:34.825Z | 막음 |
-| 11 | 실제 API | GET /api/device/status | 승인 전 기기 상태 응답 | HTTP 200 | 8df122ce-908c-4727-b2a7-0cafdcbfd6b5 | 2026-10-13T03:57:34.826Z | 막음 |
-| 11 | 실제 API | GET /manifest.json, GET / | 앱 설정(manifest)이 있고 화면이 연결함 | manifest HTTP 200 이름 나의 자료실; 화면 HTTP 200, manifest 연결 있음 | aa238d7c-3f6c-4779-8bb0-c64eb59499e2 | 2026-10-13T03:57:34.826Z | 막음 |
+| 1 | 실제 API | GET /data.json | /data.json 에 메모가 없음 | HTTP 200 | 472da3f0-ba78-42af-b27d-48857d9c1fc6 | 2026-10-13T04:36:31.106Z | 막음 |
+| 2 | 실제 API | GET /notes.json | 다른 정적 사본 없음 | HTTP 404 | 6fc1d758-75e4-453d-b95d-1ce7d554d51d | 2026-10-13T04:36:31.131Z | 막음 |
+| 3 | 실제 API | GET /api/my/notes (로그인 없음) | 로그인 없는 목록 401 | HTTP 401 | 6138c6f9-fb59-402f-adb2-e95656718b1a | 2026-10-13T04:36:31.132Z | 막음 |
+| 3 | 실제 API | GET /api/my/notes (엉터리 토큰) | 위조 토큰 401 | HTTP 401 | 12edbc48-2fe4-4e05-b7bf-2b02f46bfe21 | 2026-10-13T04:36:31.132Z | 막음 |
+| 3 | 미실행 | GET /api/notes (A 로그인) | 정상 요청 허용(200)과 본인 목록 | not_run | - | 2026-10-13T04:36:32.088Z | 미실행 |
+| 4 | 실제 API | GET /api/my/notes (쿼리에 사용자·역할) | 쿼리 신원 무시 | HTTP 401 | 4fa1f94c-7f32-4eea-ab98-8610d661b8ef | 2026-10-13T04:36:31.133Z | 막음 |
+| 4 | 실제 API | GET /api/my/notes (헤더에 사용자·역할) | 헤더 신원 무시 | HTTP 401 | aa2ae6d9-4335-49a1-9f29-9411e61cb0a7 | 2026-10-13T04:36:31.133Z | 막음 |
+| 4 | 미실행 | GET /api/notes/:id (B 로그인, A의 메모) | 거부(404) | not_run | - | 2026-10-13T04:36:32.088Z | 미실행 |
+| 5 | 실제 API | GET /rest/v1/notes | 원본 주소 직접 읽기 거부 | HTTP 404 | 6e1b371a-2262-45ec-ad76-4a64f15c4bb2 | 2026-10-13T04:36:31.134Z | 막음 |
+| 6 | 실제 API | GET /api/checks?case=s06-unregistered | 미등록 기기 거부 | HTTP 200; jsonReady=true | 8c4ab535-276a-46e3-be25-88936eedeb9b | 2026-10-13T04:36:31.134Z | 막음 |
+| 7 | 실제 API | GET /api/checks?case=s07-compound | 복합 이상 재확인 | HTTP 200; jsonReady=true | 7627e88d-4fa5-49d8-8bde-4b34a0c9a73f | 2026-10-13T04:36:31.135Z | 막음 |
+| 8 | 실제 API | GET /api/checks?case=s08-unknown-route | 모르는 경로 거부 | HTTP 200; jsonReady=true | bf22fb05-667f-46af-a3cf-cde9508c897b | 2026-10-13T04:36:31.135Z | 막음 |
+| 8 | 실제 API | GET /api/checks?case=s08-all-notes | 전체 메모 목록 거부 | HTTP 200; jsonReady=true | d34e7f2f-0317-4642-a0c1-57c4b7d2fb01 | 2026-10-13T04:36:31.136Z | 막음 |
+| 8 | 실제 API | GET /api/checks?case=s08-write-notice | 반 공지 쓰기 거부 | HTTP 200; jsonReady=true | 8165e81c-3ad3-48d5-a118-d0ceefdc21c3 | 2026-10-13T04:36:31.136Z | 막음 |
+| 8 | 실제 API | GET /api/checks?case=s08-own-note | 등록 기기의 내 메모 읽기 허용 | HTTP 200; jsonReady=true | 514f971f-e004-4e13-804b-be9ad1fda63e | 2026-10-13T04:36:31.136Z | 막음 |
+| 8 | 실제 API | GET /api/notices (로그인 없음) | 반 공지 로그인 없이 거부 | HTTP 401 | 5f451a25-41c7-45b8-abe4-5313b97ff658 | 2026-10-13T04:36:31.137Z | 막음 |
+| 9 | 실제 API | GET /api/checks?case=s09-burst-read | 조회 폭주 회수 제안 | HTTP 200; jsonReady=true | 943d80e1-42b4-4ac2-94d7-196a74f7d00e | 2026-10-13T04:36:31.137Z | 막음 |
+| 10 | 실제 API | GET /api/restore/:noteId (로그인 없음) | 로그인 없는 복원 요청 거부 | HTTP 401 | ab4d69eb-8adf-480b-b865-4fec36d42461 | 2026-10-13T04:36:31.137Z | 막음 |
+| 11 | 실제 API | GET /api/device/status | 승인 전 기기 상태 응답 | HTTP 200 | 2e1de061-61db-4d0d-a4c0-45152826e750 | 2026-10-13T04:36:31.137Z | 막음 |
+| 11 | 실제 API | GET /manifest.json | 설치형 앱 설정(manifest)이 있음 | HTTP 200 | 08c85db3-0c67-48e2-a640-24be997d0cfe | 2026-10-13T04:36:31.138Z | 막음 |
 
 점검 항목 20개: 막음 18, 뚫림 0, 미실행 2
 
