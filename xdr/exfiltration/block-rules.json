@@ -1,0 +1,54 @@
+{
+  "schema": "aleph.xdr.blockrules.v1",
+  "note": "차단 후보(목적지 기준). 판정기 적용 전 사람이 확인한다.",
+  "rules": [
+    {
+      "action": "deny",
+      "dstip": "203.0.113.50",
+      "evidenceAlertId": "ex-01",
+      "expiresAt": "2026-09-27T01:16:03.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "198.51.100.40",
+      "evidenceAlertId": "ex-02",
+      "expiresAt": "2026-09-27T01:16:48.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "203.0.113.55",
+      "evidenceAlertId": "ex-05",
+      "expiresAt": "2026-09-27T03:04:26.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "192.0.2.90",
+      "evidenceAlertId": "ex-06",
+      "expiresAt": "2026-09-27T04:02:19.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "198.51.100.45",
+      "evidenceAlertId": "ex-07",
+      "expiresAt": "2026-09-27T05:12:08.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "203.0.113.60",
+      "evidenceAlertId": "ex-08",
+      "expiresAt": "2026-09-27T06:03:41.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "203.0.113.61",
+      "evidenceAlertId": "ex-09",
+      "expiresAt": "2026-09-27T07:08:12.000Z"
+    },
+    {
+      "action": "deny",
+      "dstip": "198.51.100.46",
+      "evidenceAlertId": "ex-10",
+      "expiresAt": "2026-09-27T08:01:05.000Z"
+    }
+  ]
+}

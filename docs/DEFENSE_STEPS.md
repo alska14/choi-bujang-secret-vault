@@ -27,6 +27,7 @@
 | 보너스 xdr-03 | 알려진 취약점(CVE) 악용 | 경보를 block·alert·record 로 분류, Jev 없이 단독 판정 | `xdr/known-cve/` |
 | 보너스 xdr-04 | 몰래 심어진 프로그램(지속성) | 경보를 block·alert·record 로 분류, Jev 없이 단독 판정 | `xdr/persistence/` |
 | 보너스 xdr-05 | 권한 가로채기(권한 상승) | 경보를 block·alert·record 로 분류, Jev 없이 단독 판정 | `xdr/privilege/` |
+| 보너스 xdr-06 | 자료 빼돌리기(유출) | 경보를 block·alert·record 로 분류, 전송량 같은 숫자와 문구를 함께 판단, 목적지 기준 차단 후보 | `xdr/exfiltration/` |
 
 나머지 보너스(`known-cve`, `persistence`, `privilege`, `exfiltration`)는 아직 하지 않았습니다.
 
@@ -140,6 +141,10 @@
 ## 보너스 xdr-05: 권한 가로채기
 
 같은 구조로 경보 26건을 분류합니다. 결과는 block 9, alert 8, record 9입니다. xdr-03·04처럼 Jev 없이 `decide.mjs`가 import 문 없이 혼자 계산합니다. 패턴은 관리자 그룹 추가, 방금 관리자가 된 계정의 활동, 업무 시간 밖·낯선 주소·남의 계정 권한 사용이며(MITRE T1068, T1078), "관리자 그룹은 아닙니다" 같은 부정 문장을 오탐하지 않는 것이 핵심이었습니다. 자세한 풀이는 [docs/steps/xdr-05.md](steps/xdr-05.md)에 있습니다.
+
+## 보너스 xdr-06: 자료 빼돌리기
+
+같은 구조로 경보 30건을 분류합니다. 결과는 block 10, alert 10, record 10입니다. xdr-03~05처럼 Jev 없이 `decide.mjs`가 import 문 없이 혼자 계산합니다. 이번에는 전송량·파일 수·반복 횟수 같은 숫자와 문구를 함께 봤고(MITRE T1041, T1048), 큰 전송이라도 평소 백업처럼 이상한 맥락이 없으면 block 이 아니라 alert 로 두었습니다. 차단 후보는 출발 주소가 아니라 데이터가 나간 목적지 주소로 만들었습니다. 자세한 풀이는 [docs/steps/xdr-06.md](steps/xdr-06.md)에 있습니다.
 
 ## 이 과정에서 배운 것
 
