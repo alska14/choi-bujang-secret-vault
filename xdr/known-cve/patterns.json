@@ -1,0 +1,55 @@
+{
+  "technique": "T1190",
+  "cve": "CVE-2021-44228",
+  "patterns": [
+    {
+      "id": "high-severity",
+      "name": "높은 위험도의 취약점 악용 경보",
+      "when": { "minLevel": 10 },
+      "evidence": "Wazuh 위험도 10 이상의 알려진 취약점 경보는 명확한 악용 시도로 봅니다.",
+      "confidence": 0.9
+    },
+    {
+      "id": "lookup-in-header",
+      "name": "머리글 안의 원격 조회 구문",
+      "when": { "lookupIn": "header" },
+      "evidence": "요청 머리글(user-agent 등)에 jndi 형태의 원격 조회 구문이 있으면 CVE-2021-44228 악용의 전형입니다.",
+      "confidence": 0.97
+    },
+    {
+      "id": "lookup-in-argument",
+      "name": "요청 인자 안의 원격 조회 구문",
+      "when": { "lookupIn": "argument" },
+      "evidence": "주소·검색어 같은 요청 인자에 jndi 형태의 원격 조회 구문이 있으면 취약한 로그 기록기를 노린 요청입니다.",
+      "confidence": 0.95
+    },
+    {
+      "id": "cve-form-described",
+      "name": "CVE-2021-44228 형태로 설명된 요청",
+      "when": { "textAny": ["CVE-2021-44228 형태"] },
+      "evidence": "경보 설명이 요청을 CVE-2021-44228 형태라고 밝히면 악용 시도로 봅니다.",
+      "confidence": 0.9
+    },
+    {
+      "id": "scanner-trace",
+      "name": "알려진 취약점 점검 도구의 흔적",
+      "when": { "scanner": true },
+      "evidence": "알려진 취약점 점검 도구의 이름이나 표지가 있으면 탐색 단계의 시도지만 악용이라 단정하기는 어렵습니다.",
+      "confidence": 0.6
+    },
+    {
+      "id": "cve-name-only",
+      "name": "취약점 이름이나 단어만 있는 요청",
+      "when": { "nameOnly": true },
+      "evidence": "취약점 이름이나 jndi 같은 단어만 있고 조회 구문이 없으면 수업 자료 검색일 수 있어 사람이 확인합니다.",
+      "confidence": 0.55
+    },
+    {
+      "id": "mid-severity",
+      "name": "중간 위험도 경보",
+      "when": { "minLevel": 5 },
+      "evidence": "위험도 5~9 경보는 악용이라 단정하기 어려워 사람이 확인합니다.",
+      "confidence": 0.55
+    }
+  ]
+}
