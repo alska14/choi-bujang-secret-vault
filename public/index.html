@@ -72,6 +72,17 @@
       <p id="memo-message" aria-live="polite"></p>
       <ul id="notes"></ul>
     </section>
+    <section id="ops" class="box">
+      <h2>탈환 작전실</h2>
+      <p>아래 수치는 서버의 점검 기록(<code>/api/checks</code>)에서 셉니다. 기록을 읽지 못하면 수치를 비워 둡니다. 자세한 표는 <a href="/ops.html">작전실 화면</a>에 있습니다.</p>
+      <dl id="ops-stats">
+        <dt>점검 항목</dt><dd data-k="total">-</dd>
+        <dt>막은 공격</dt><dd data-k="blocked">-</dd>
+        <dt>뚫린 공격</dt><dd data-k="failed">-</dd>
+        <dt>실행하지 않은 점검</dt><dd data-k="notRun">-</dd>
+      </dl>
+      <p id="ops-meta"></p>
+    </section>
   </main>
   <script type="module">
     // 이 화면에는 Supabase 키가 없습니다. 로그인과 자료 요청은 모두 서버 함수(/api/auth, /api/notes)를 거칩니다.
@@ -239,6 +250,24 @@
         $('#memo-body').value = '';
       });
     });
+  </script>
+  <script type="module">
+    // 작전실 요약: 서버 점검 기록의 수치만 보여 줍니다. 브라우저 저장소를 쓰지 않습니다.
+    (async () => {
+      const meta = document.getElementById('ops-meta');
+      try {
+        const response = await fetch('/api/checks', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data) { meta.textContent = '서버 점검 기록을 읽지 못했습니다. 수치를 표시하지 않습니다.'; return; }
+        for (const dd of document.querySelectorAll('#ops-stats dd')) {
+          const value = data[dd.dataset.k];
+          dd.textContent = Number.isInteger(value) ? String(value) : '-';
+        }
+        meta.textContent = `기록 시각 ${data.checkedAt ?? '-'} · 검사한 커밋 ${String(data.commit ?? '-').slice(0, 12)}`;
+      } catch {
+        meta.textContent = '서버에 연결하지 못했습니다. 수치를 표시하지 않습니다.';
+      }
+    })();
   </script>
 </body>
 </html>

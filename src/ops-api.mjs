@@ -2,11 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { diffPolicy, readCurrentPolicy, verifySnapshot } from '../scripts/policy-restore.mjs';
-import { notRunItems, ruleSummary, runCodeChecks, runLiveProbes, summarize } from './ops-checks.mjs';
+import { collectAttackChecks, summarizeAttempts } from './attack-check.mjs';
+import { RULE_IDS } from './decider.mjs';
 
-// 12단계 탈환 작전실이 읽는 서버 기록. 화면의 수치는 모두 이 응답에서 온다.
-// 가상 메모 본문과 토큰은 담지 않고, 항목마다 실제 API 응답으로 확인한 것(live_api), 코드를 직접 실행한 것(code_run),
-// 실행하지 않은 것(not_run)을 구분한다. 성공 문구는 만들지 않는다.
+// 12단계 탈환 작전실이 읽는 서버 기록. 화면의 수치와 표는 모두 이 응답에서 온다.
+// 점검 항목은 제출 묶음(npm run bundle)과 같은 목록(src/attack-check.mjs)에서 만들어서, 화면의 수치와 묶음의 수치가 같다.
+// 항목마다 종류를 구분한다: live_api(배포 주소에 보낸 실제 요청의 응답), not_run(보내지 않은 시험).
+// 가상 메모 본문과 토큰은 담지 않는다.
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 // 복구 버전 요약: 검증한 정책 사본을 읽어 검증하고 현재 시험 정책과의 차이 개수를 센다.
@@ -24,7 +26,7 @@ export async function readRecovery(root = ROOT) {
   return { available: true, valid: true, policyRevision: snapshot.policyRevision, verifiedCommit: snapshot.verifiedCommit.slice(0, 12), changes };
 }
 
-export function createOpsApi({ base, fetchImpl = fetch, recovery = readRecovery, now = () => new Date(), commit = null }) {
+export function createOpsApi({ base, recovery = readRecovery, now = () => new Date(), commit = null, collect = collectAttackChecks }) {
   return async function ops(request, response) {
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
     response.setHeader('Cache-Control', 'no-store');
@@ -34,22 +36,14 @@ export function createOpsApi({ base, fetchImpl = fetch, recovery = readRecovery,
       return response.status(405).json({ error: 'METHOD_NOT_ALLOWED', message: '허용되지 않는 방법입니다.' });
     }
     try {
-      const [live, code, recovered] = await Promise.all([
-        runLiveProbes({ base, fetchImpl, now }), runCodeChecks({ now }), recovery(),
-      ]);
-      const items = [...live, ...code, ...notRunItems({ now })].sort((a, b) => a.stage - b.stage);
+      const [items, recovered] = await Promise.all([collect({ publicAppUrl: base }, { now }), recovery()]);
       return response.status(200).json({
         schema: 'aleph.ops.v1',
         checkedAt: now().toISOString(),
         commit,
-        sources: {
-          live_api: '배포 주소에 보낸 실제 HTTP 요청의 응답 상태',
-          code_run: '판정기·탐지 함수를 가상 요청으로 직접 실행한 결과(배포 요청 아님)',
-          not_run: '실행하지 않은 시험(통과로 세지 않음)',
-        },
-        rules: ruleSummary(),
+        rules: { count: RULE_IDS.length, ids: [...RULE_IDS] },
         recovery: recovered,
-        summary: summarize(items),
+        summary: summarizeAttempts(items),
         items,
       });
     } catch {

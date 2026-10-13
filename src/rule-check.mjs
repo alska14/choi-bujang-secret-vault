@@ -10,6 +10,7 @@ const base = {
 };
 
 const CASES = {
+  's08-own-note': [{ ...base }, 'allow'],
   's06-unregistered': [{ ...base, deviceRegistered: false }, 'deny'],
   's07-compound': [{ ...base, signals: { source: 'check', region: 'foreign', network: 'unusual', hour: 3 } }, 'step_up'],
   's08-unknown-route': [{ ...base, route: 'GET /__unknown__' }, 'deny'],
