@@ -2,7 +2,7 @@
 
 이 저장소는 1단계에서 학생 본인이 GitHub 저장소와 Vercel 배포를 만드는 출발점입니다. 포함된 메모 네 건은 가상 자료입니다. 실제 학생 자료, 토큰, 비밀키를 넣지 마세요.
 
-각 단계에서 한 일과 확인 방법은 [docs/DEFENSE_STEPS.md](docs/DEFENSE_STEPS.md)에 단계별로 정리했습니다.
+각 단계에서 한 일과 확인 방법은 [docs/DEFENSE_STEPS.md](docs/DEFENSE_STEPS.md)에 단계별로 정리했습니다. 제작 프롬프트별 풀이는 단계마다 나눠 [docs/steps](docs/steps/README.md)에 있습니다.
 
 ## 학생이 하는 일: 세 걸음
 
