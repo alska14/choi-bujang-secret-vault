@@ -372,3 +372,14 @@ DB는 `db/rls.sql`로 `notes` 테이블의 권한을 `public·anon·authenticate
 - 작전실의 「기대대로」는 우리가 정한 기대와 맞는다는 뜻이며 심판 판정이 아닙니다. 판정기·탐지 항목은 가상 요청을 직접 실행한 결과입니다.
 - 작전실 서버 함수는 배포 주소(`publicAppUrl`)에 요청을 보내 확인하므로, 응답이 느리면 일부 항목이 「미실행」이 될 수 있습니다.
 - 11단계에서 화면이 기기를 승인하지 못하는 상태(항상 승인 전)는 그대로입니다.
+
+### 12단계 보완: 심판 실행기(runner)에 맞춘 점검 (재제출에서도 「확인하지 못했습니다」 뒤)
+
+첫 제출과 재제출 모두 판정이 「확인하지 못했습니다」(`UNV_RUN_ENVIRONMENT`, 점수 0/100, 판정 화면은 "실패가 아니며 학생 잘못이 아닐 수 있다"고 안내)였습니다. 원인은 확인하지 못했습니다. 다만 강사 통과용 표본(`byteback-sample-pass`)의 2026-10-11 커밋(「12단계 묶음을 현재 runner 증거에 맞춤」)을 비교해 보니, 우리 점검이 옛 방식이라 runner가 응답을 독립적으로 관측할 근거가 없었을 가능성이 있어 표본의 방식에 맞췄습니다. 심판 코드를 본 것이 아니라 표본과 문서를 근거로 한 추정입니다.
+
+- **증거 표식**: 점검이 보내는 모든 요청의 `fetch` 옵션에 `alephEvidence: { caseId, requestKey: 'read' }`를 붙입니다. 요청 헤더나 주소에는 넣지 않습니다. 읽기(GET) 요청만 보냅니다.
+- **규칙 사례 경로**: `GET /api/checks?case=<사례>`(`api/checks.js`, `src/checks-api.mjs`, `src/rule-check.mjs`)가 고정된 가상 입력으로 판정기·탐지 규칙을 실행하고 `{ready, decision, reasonCode}` 또는 `{ready, action}`을 돌려줍니다. 사례는 `s06-unregistered`, `s07-compound`, `s08-unknown-route`, `s08-all-notes`, `s08-write-notice`, `s09-burst-read`입니다. 모르는 사례나 배열은 400(`unknown_check`)이고, 사용자 입력을 코드로 실행하지 않습니다. `ready`는 가상 조건에서 기대한 판정이 나왔다는 뜻이며 실제 사용자 기기의 승인 상태가 아닙니다. 사례 없이 부르면 작전실과 같은 점검의 요약 수치(`total`, `blocked`, `failed`, `notRun`)를 돌려줍니다.
+- **점검 결과 형식**: `attackId`, `stage`, `expected`, `observed`, `result`(`blocked`, `breached`, `not_run`) 다섯 키만 담습니다. 요청을 보내지 못하면 `not_run`이고 「막음」으로 세지 않습니다. `scripts/bundle.mjs`도 같은 형식을 검증하고 `checkedAt`을 기록합니다.
+- **대기 시간 상한**: 점검 19개를 동시에 시작하고 요청마다 8초로 제한합니다. 응답이 없는 주소로 돌려 보면 오류 없이 8초 만에 끝나고 18개가 `not_run`으로 남습니다(이전 구조는 첫 점검에서 오류로 중단).
+- 1단계 설정으로 부르면 옛 동작(`/data.json` 확인)을 유지합니다(`test/r5.test.mjs`).
+- 시험(`test/checks.test.mjs` 7개)은 가짜 배포로 형식·증거 표식·읽기 요청만 보냄·메모 본문 비기록·네트워크 오류 처리를 확인합니다.

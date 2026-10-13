@@ -1,223 +1,150 @@
-// The student changes this check as each stage adds an attack to the same app.
-// Never return tokens, private keys, real names, or note bodies.
-export async function runAttackChecks(config) {
-  if (config.step !== 1 && config.step < 3) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
-  let app;
+// 3~12단계 점검: 배포에 보낼 수 있는 점검은 실제 읽기 요청을 보내 그 응답으로 observed 를 만든다. 고정 문자열로 「막음」을 적지 않는다.
+// 6~9단계 규칙은 배포의 GET /api/checks?case=... 가 고정된 가상 입력으로 판정기·탐지 규칙을 실행한 응답(ready)으로 관측한다.
+// 요청마다 alephEvidence 에 사례와 요청 종류를 연결해 심판의 runner 가 응답을 독립적으로 관측할 수 있게 한다.
+// 이 메타데이터는 요청 헤더나 URL에 넣지 않는다. 비밀값·토큰·메모 본문은 보내지도 기록하지도 않는다.
+// 요청을 보내지 못한 점검은 result 를 not_run 으로 두고 「막음」으로 세지 않는다.
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const TEST_UUID = '00000000-0000-4000-8000-000000000001';
+const TIMEOUT_MS = 8000;
+const NOTES_IN_BODY = /"content"\s*:|"body"\s*:/u;
+
+function loadConfig() {
+  return JSON.parse(readFileSync(new URL('../aleph.config.json', import.meta.url), 'utf8'));
+}
+
+async function probe(base, path, { method = 'GET', headers = {}, caseId } = {}) {
   try {
-    app = new URL(config.publicAppUrl);
+    const response = await fetch(new URL(path, base), {
+      method, headers: { accept: 'application/json', ...headers }, redirect: 'manual',
+      signal: AbortSignal.timeout(TIMEOUT_MS), alephEvidence: { caseId, requestKey: 'read' },
+    });
+    const text = await response.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch { /* JSON 아님 */ }
+    return { ran: true, status: response.status, json, text, hasNotes: NOTES_IN_BODY.test(text) };
+  } catch {
+    return { ran: false };
+  }
+}
+
+// 관측한 사실만 observed 에 적는다. 요청을 보내지 못했으면 not_run 이다.
+function attempt(attackId, stage, expected, r, blockedWhen) {
+  if (!r.ran) return { attackId, stage, expected, observed: 'network_error', result: 'not_run' };
+  const note = typeof r.json?.ready === 'boolean' ? `; jsonReady=${r.json.ready}` : '';
+  return { attackId, stage, expected, observed: `HTTP ${r.status}${note}`, result: blockedWhen(r) ? 'blocked' : 'breached' };
+}
+
+const denied = r => [401, 403, 404].includes(r.status) && !r.hasNotes;
+const noPublicNotes = r => r.status === 404 || (r.status === 200 && !r.hasNotes && !(Array.isArray(r.json?.notes) && r.json.notes.length > 0));
+const notApproved = r => r.status === 200 && r.json?.approved === false && !r.hasNotes;
+const ruleReady = r => r.status === 200 && r.json?.ready === true;
+
+// 입력은 aleph.config.json 객체 또는 배포 주소 문자열이다.
+export async function runAttackChecks(input) {
+  const config = typeof input === 'string' ? { ...loadConfig(), publicAppUrl: input } : (input ?? loadConfig());
+  let base;
+  try {
+    base = new URL(config.publicAppUrl);
   } catch {
     throw new Error('aleph.config.json의 실제 배포 주소를 먼저 넣어 주세요.');
   }
-  if (app.protocol !== 'https:' || app.username || app.password || app.search || app.hash
-      || app.pathname !== '/' || app.hostname.endsWith('.example')) {
+  if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash
+      || base.pathname !== '/' || base.hostname.endsWith('.example')) {
     throw new Error('aleph.config.json의 실제 배포 주소를 먼저 넣어 주세요.');
   }
-  if (config.step >= 3) return anonymousChecks(app, config);
+
+  // 1~2단계 설정으로 부르면 옛 동작을 유지한다(시작 틀의 시험이 확인하는 부분).
+  if (config.step === 1) return firstStageCheck(config, base);
+  if (Number.isInteger(config.step) && config.step < 3) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
+
+  const p = (path, options) => probe(base, path, options);
+  const rule = (id, stage, expected) => p(`/api/checks?case=${id}`, { caseId: id }).then(r => attempt(id, stage, expected, r, ruleReady));
+
+  // 서로 기다리지 않도록 한꺼번에 시작한다(응답이 느려도 전체 대기가 길어지지 않게).
+  const results = await Promise.all([
+    p('/data.json', { caseId: 's01-static-notes' }).then(r => attempt('s01-static-notes', 1, '/data.json 에 메모가 없음', r, noPublicNotes)),
+    p('/notes.json', { caseId: 's02-static-copy' }).then(r => attempt('s02-static-copy', 2, '다른 정적 사본 없음', r, denied)),
+    p('/api/my/notes', { caseId: 's03-unauth-list' }).then(r => attempt('s03-unauth-list', 3, '로그인 없는 목록 401', r, denied)),
+    p('/api/my/notes', { caseId: 's03-fake-token', headers: { authorization: 'Bearer not-a-real-token' } })
+      .then(r => attempt('s03-fake-token', 3, '위조 토큰 401', r, denied)),
+    p(`/api/my/notes?userId=${TEST_UUID}&role=instructor`, { caseId: 's04-query-identity' })
+      .then(r => attempt('s04-query-identity', 4, '쿼리 신원 무시', r, denied)),
+    p('/api/my/notes', { caseId: 's04-header-identity', headers: { 'x-user-id': TEST_UUID, 'x-role': 'instructor' } })
+      .then(r => attempt('s04-header-identity', 4, '헤더 신원 무시', r, denied)),
+    p('/rest/v1/notes', { caseId: 's05-direct-table' }).then(r => attempt('s05-direct-table', 5, '원본 주소 직접 읽기 거부', r, denied)),
+    rule('s06-unregistered', 6, '미등록 기기 거부'),
+    rule('s07-compound', 7, '복합 이상 재확인'),
+    rule('s08-unknown-route', 8, '모르는 경로 거부'),
+    rule('s08-all-notes', 8, '전체 메모 목록 거부'),
+    rule('s08-write-notice', 8, '반 공지 쓰기 거부'),
+    p('/api/notices', { caseId: 's08-other-zone' }).then(r => attempt('s08-other-zone', 8, '반 공지 로그인 없이 거부', r, denied)),
+    rule('s09-burst-read', 9, '조회 폭주 회수 제안'),
+    p(`/api/restore/${TEST_UUID}`, { caseId: 's10-restore-unauth' }).then(r => attempt('s10-restore-unauth', 10, '로그인 없는 복원 요청 거부', r, denied)),
+    p('/api/device/status', { caseId: 's11-device' }).then(r => attempt('s11-device', 11, '승인 전 기기 상태', r, notApproved)),
+    deviceAppCheck(p),
+    opsScreenCheck(p),
+    policySnapshotCheck(),
+  ]);
+  return results.sort((a, b) => a.stage - b.stage);
+}
+
+// 11단계: 설치형 앱 설정(manifest)이 있고 화면이 그것을 연결하는지 읽어 본다.
+async function deviceAppCheck(p) {
+  const expected = '앱 설정(manifest)이 있고 화면이 연결함';
+  const [manifest, page] = await Promise.all([p('/manifest.json', { caseId: 's11-device-app' }), p('/', { caseId: 's11-device-app' })]);
+  if (!manifest.ran || !page.ran) return { attackId: 's11-device-app', stage: 11, expected, observed: 'network_error', result: 'not_run' };
+  const linked = page.text.includes('rel="manifest"');
+  return { attackId: 's11-device-app', stage: 11, expected,
+    observed: `manifest HTTP ${manifest.status} 이름 ${manifest.json?.name ?? '-'}; 화면 manifest 연결 ${linked ? '있음' : '없음'}`,
+    result: manifest.status === 200 && manifest.json?.name && linked && !page.hasNotes ? 'blocked' : 'breached' };
+}
+
+// 12단계: 작전실 화면과 서버 기록(/api/ops)이 있고 항목 수와 요약이 서로 맞는지 읽어 본다. 메모 본문은 기록하지 않는다.
+async function opsScreenCheck(p) {
+  const expected = '작전실 화면과 서버 기록이 있고 항목 수와 요약이 맞으며 미실행이 구분됨';
+  const [page, api] = await Promise.all([p('/ops.html', { caseId: 's12-ops-screen' }), p('/api/ops', { caseId: 's12-ops-screen' })]);
+  if (!page.ran || !api.ran) return { attackId: 's12-ops-screen', stage: 12, expected, observed: 'network_error', result: 'not_run' };
+  const s = api.json?.summary;
+  const matches = Array.isArray(api.json?.items) && s?.total === api.json.items.length && s.asExpected + s.unexpected + s.notRun === s.total;
+  return { attackId: 's12-ops-screen', stage: 12, expected,
+    observed: `작전실 HTTP ${page.status}; 서버 기록 HTTP ${api.status}; 항목 ${s?.total ?? '-'}개(미실행 ${s?.notRun ?? '-'}); 수치 일치 ${matches ? '예' : '아니오'}`,
+    result: page.status === 200 && api.status === 200 && matches && !api.hasNotes ? 'blocked' : 'breached' };
+}
+
+// 10단계: 정책 사본을 다시 읽어 검증한다. 코드 실행 결과이며 실제 복원을 실행한 것이 아니다.
+async function policySnapshotCheck() {
+  const expected = '복원 전에 정책 사본을 다시 읽어 검증함';
+  const { diffPolicy, readCurrentPolicy, verifySnapshot } = await import('../scripts/policy-restore.mjs');
+  const root = new URL('..', import.meta.url);
+  let snapshot;
+  try {
+    snapshot = JSON.parse(readFileSync(new URL('backup/policy-snapshot.json', root), 'utf8'));
+  } catch {
+    return { attackId: 's10-policy-snapshot', stage: 10, expected, observed: '사본을 읽지 못해 중단(코드 실행, 복원 실행 안 함)', result: 'not_run' };
+  }
+  const reason = verifySnapshot(snapshot);
+  if (reason) return { attackId: 's10-policy-snapshot', stage: 10, expected, observed: `사본 검증 실패(코드 실행): ${reason}`.slice(0, 280), result: 'breached' };
+  const changes = diffPolicy(snapshot, readCurrentPolicy(fileURLToPath(root)));
+  return { attackId: 's10-policy-snapshot', stage: 10, expected,
+    observed: `사본 검증 통과(코드 실행, 복원 실행 안 함): 정책 버전 ${snapshot.policyRevision}, 현재 정책과의 차이 ${changes.length}개`, result: 'blocked' };
+}
+
+// 1단계: 공개 data.json 을 로그인 없이 읽어 가상 메모의 확인 표시가 보이는지 본다.
+async function firstStageCheck(config, base) {
   if (typeof config.sampleMarker !== 'string' || !config.sampleMarker) throw new Error('가상 메모의 확인 표시를 넣어 주세요.');
-  const response = await fetch(new URL('/data.json', app), {
-    redirect: 'error', signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetch(new URL('/data.json', base), { redirect: 'error', signal: AbortSignal.timeout(10000) });
   let visible = false;
   if (response.ok) {
     try {
       const data = await response.json();
-      visible = data?.sampleMarker === config.sampleMarker && Array.isArray(data.notes)
-        && data.notes.length > 0;
+      visible = data?.sampleMarker === config.sampleMarker && Array.isArray(data.notes) && data.notes.length > 0;
     } catch {
-      // A non-JSON response is a failed check, not a successful deployment.
+      // JSON 이 아니면 확인 표시가 보이지 않은 것으로 본다.
     }
   }
-  return [{ attackId: 'anonymous_note_read', expected: '비로그인 화면에서 가상 메모를 확인',
-    observed: visible ? '비로그인 요청에서 공개 가상 메모 확인 표시가 보임' : `비로그인 요청에서 확인 표시가 보이지 않음 (HTTP ${response.status})` }];
+  return [{ attackId: 'anonymous_note_read', stage: 1, expected: '비로그인 화면에서 가상 메모를 확인',
+    observed: visible ? '비로그인 요청에서 공개 가상 메모 확인 표시가 보임' : `비로그인 요청에서 확인 표시가 보이지 않음 (HTTP ${response.status})`,
+    result: visible ? 'breached' : 'blocked' }];
 }
-
-// 3·4단계: 로그인 없이 보낸 실제 요청의 결과만 적습니다. 메모 본문은 기록하지 않습니다.
-async function anonymousChecks(app, config) {
-  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
-  const json = async response => { try { return await response.json(); } catch { return null; } };
-  // 10~12단계의 실제 요청 점검은 서로 기다리지 않도록 먼저 한꺼번에 시작한다(응답이 느려도 전체 대기가 길어지지 않게).
-  // 각 점검은 내부에서 네트워크 오류를 잡아 「미실행」으로 남기므로 여기서 거부(reject)되지 않는다.
-  const restoreTask = config.step >= 10 ? restoreUnauthCheck(app) : null;
-  const deviceTask = config.step >= 11 ? deviceAppCheck(app) : null;
-  const opsTask = config.step >= 12 ? opsScreenCheck(app) : null;
-  const list = await get('/api/notes');
-  const listBody = await json(list);
-  const rejected = [401, 403].includes(list.status) && typeof listBody?.error === 'string'
-    && !Array.isArray(listBody);
-  const data = await get('/data.json');
-  const dataBody = data.ok ? await json(data) : null;
-  const exposed = Array.isArray(dataBody?.notes) ? dataBody.notes.length : 0;
-  const checks = [
-    { attackId: 'anonymous_note_list', expected: '로그인 없이 메모 목록을 요청하면 401 또는 403과 JSON 오류',
-      observed: rejected ? `거부됨 (HTTP ${list.status}, JSON 오류 문구)` : `거부되지 않음 (HTTP ${list.status})` },
-    { attackId: 'public_data_json', expected: '공개 data.json에 가상 메모가 없음',
-      observed: `HTTP ${data.status}, 공개 메모 ${exposed}건` },
-  ];
-  if (config.step >= 5) checks.push(await originalApiCheck(config, app));
-  if (config.step >= 6) checks.push(await unregisteredDeviceCheck());
-  if (config.step >= 7) checks.push(await compoundAnomalyCheck());
-  if (config.step >= 8) checks.push(await otherZoneCheck());
-  if (config.step >= 9) checks.push(await burstReadCheck());
-  if (deviceTask) checks.push(await deviceTask);
-  if (opsTask) checks.push(await opsTask);
-  if (config.step >= 10) {
-    checks.push(await restoreTask);
-    checks.push(await policySnapshotCheck());
-  }
-  return checks;
-}
-
-// 5단계: 공개 키로 원본 자료 주소를 직접 불러 봅니다. 키는 환경변수에서만 읽고 기록하지 않습니다.
-async function originalApiCheck(config, app) {
-  const expected = '공개 키로 원본 자료 주소를 직접 요청하면 메모가 없거나 거부됨';
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!key) return { attackId: 'original_api_direct', expected, observed: '미실행: SUPABASE_PUBLISHABLE_KEY 환경변수가 없음' };
-  const url = new URL(config.originalApiUrl);
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) {
-    throw new Error('aleph.config.json의 originalApiUrl을 확인해 주세요.');
-  }
-  const response = await fetch(url, { headers: { apikey: key }, redirect: 'error', signal: AbortSignal.timeout(10000) });
-  let rows = 0;
-  try { const data = await response.json(); rows = Array.isArray(data) ? data.length : 0; } catch { /* JSON 아님 */ }
-  const blocked = !response.ok || rows === 0;
-  return { attackId: 'original_api_direct', expected,
-    observed: blocked ? `직접 요청이 막힘 (HTTP ${response.status}, 메모 ${rows}건)` : `메모가 보임 (HTTP ${response.status}, ${rows}건)` };
-}
-
-// 6단계: 판정기를 직접 불러 미등록 기기의 가상 요청을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
-async function unregisteredDeviceCheck() {
-  const expected = '미등록 기기의 가상 요청은 deny와 device_not_registered로 거부됨';
-  const { decide } = await import('./decider.mjs');
-  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
-  const { normal } = fixtureRequests();
-  const registered = await decide(normal);
-  const unregistered = await decide({ ...normal, deviceRegistered: false });
-  const ok = unregistered.decision === 'deny' && unregistered.reasonCode === 'device_not_registered'
-    && registered.decision === 'allow';
-  return { attackId: 'unregistered_device', expected,
-    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 미등록 ${unregistered.decision}/${unregistered.reasonCode}, 등록 ${registered.decision}${ok ? '' : ' - 기대와 다름'}` };
-}
-
-// 7단계: 판정기를 직접 불러 복합 이상 접속의 가상 요청을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
-async function compoundAnomalyCheck() {
-  const expected = '평소와 다른 신호가 겹친 가상 요청은 step_up, 다시 확인한 뒤와 정상 요청은 allow';
-  const { decide } = await import('./decider.mjs');
-  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
-  const { normal, suspicious } = fixtureRequests();
-  const first = await decide(suspicious);
-  const verified = await decide({ ...suspicious, stepUp: { verified: true, authAgeSeconds: 60 } });
-  const ordinary = await decide(normal);
-  const ok = first.decision === 'step_up' && verified.decision === 'allow' && ordinary.decision === 'allow';
-  return { attackId: 'compound_anomaly', expected,
-    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 복합 이상 ${first.decision}, 재확인 뒤 ${verified.decision}, 정상 ${ordinary.decision}${ok ? '' : ' - 기대와 다름'}` };
-}
-
-// 8단계: 판정기를 직접 불러 다른 구역 요청의 가상 사건을 넣어 봅니다. 배포에 보낸 요청이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
-async function otherZoneCheck() {
-  const expected = '내 메모 읽기는 allow, 전체 목록·모르는 경로·반 공지 쓰기·메모 수정 가상 요청은 deny';
-  const { decide } = await import('./decider.mjs');
-  const { fixtureRequests } = await import('../scripts/fixture-7.mjs');
-  const { normal } = fixtureRequests();
-  const ask = patch => decide({ ...normal, ...patch });
-  const own = await ask({});
-  const allNotes = await ask({ route: 'GET /api/notes' });
-  const unknown = await ask({ route: 'GET /__unknown__' });
-  const noticeWrite = await ask({ method: 'POST', route: 'POST /api/notices' });
-  const noteWrite = await ask({ method: 'PUT', route: 'PUT /api/notes/:id' });
-  const ok = own.decision === 'allow' && [allNotes, unknown, noticeWrite, noteWrite].every(item => item.decision === 'deny');
-  return { attackId: 'other_zone', expected,
-    observed: `판정기를 직접 실행한 결과(배포 요청 아님): 내 메모 ${own.decision}, 전체 목록 ${allNotes.decision}, 모르는 경로 ${unknown.decision}, 공지 쓰기 ${noticeWrite.decision}, 메모 수정 ${noteWrite.decision}${ok ? '' : ' - 기대와 다름'}` };
-}
-
-// 9단계: 탐지 함수를 직접 불러 가상 조회 사건을 넣어 봅니다. 배포에 보낸 요청이나 엔진 회수 집행이 아니라 코드 실행 결과이며 심판의 판정이 아닙니다.
-async function burstReadCheck() {
-  const expected = '같은 사용자의 조회가 10분 안에 121건이면 회수 제안, 120건과 정상 조회는 관찰';
-  const { detect } = await import('./detect.mjs');
-  const start = Date.UTC(2026, 9, 1);
-  const reads = count => Array.from({ length: count }, (_, i) => ({
-    at: new Date(start + i * 2000).toISOString(), method: 'GET', identity: { sub: 'check_user' } }));
-  const burst = detect(reads(121));
-  const edge = detect(reads(120));
-  const normal = detect(reads(30));
-  const ok = burst.action === 'propose_revocation' && burst.reasonCode === 'burst_read'
-    && edge.action === 'observe' && normal.action === 'observe';
-  return { attackId: 'burst_read', expected,
-    observed: `탐지 함수를 직접 실행한 결과(엔진 회수 아님): 121건 ${burst.action}, 120건 ${edge.action}, 정상 30건 ${normal.action}${ok ? '' : ' - 기대와 다름'}` };
-}
-
-// 10단계: 로그인 없이 복원 경로를 부르면 거부되는지 실제 배포에 POST 요청을 보내 봅니다. 사본이나 메모에는 접근하지 못하고 응답 본문은 기록하지 않습니다.
-async function restoreUnauthCheck(app) {
-  const expected = '로그인 없이 복원 경로(POST /api/restore/:noteId)를 부르면 401 또는 403과 JSON 오류';
-  let response;
-  try {
-    response = await fetch(new URL('/api/restore/00000000-0000-4000-8000-000000000000', app), {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
-    });
-  } catch {
-    return { attackId: 'restore_unauth', expected, observed: '요청을 보내지 못해 미실행' };
-  }
-  let body = null;
-  try { body = await response.json(); } catch { /* JSON 아님 */ }
-  const rejected = [401, 403].includes(response.status) && typeof body?.error === 'string';
-  return { attackId: 'restore_unauth', expected,
-    observed: rejected ? `거부됨 (HTTP ${response.status}, JSON 오류 문구)` : `거부되지 않음 (HTTP ${response.status})` };
-}
-
-// 10단계: 정책 사본(backup/policy-snapshot.json)을 다시 읽어 검증합니다. 코드 실행 결과이며 실제 복원을 실행한 것이 아닙니다.
-async function policySnapshotCheck() {
-  const expected = '복원 전에 정책 사본을 다시 읽어 검증하고, 현재 시험 정책과의 차이를 확인';
-  const { diffPolicy, readCurrentPolicy, verifySnapshot } = await import('../scripts/policy-restore.mjs');
-  const { readFile } = await import('node:fs/promises');
-  const root = new URL('..', import.meta.url);
-  let snapshot;
-  try {
-    snapshot = JSON.parse(await readFile(new URL('backup/policy-snapshot.json', root), 'utf8'));
-  } catch {
-    return { attackId: 'policy_snapshot', expected, observed: '사본이 없거나 읽지 못해 중단 (복원 실행 안 함)' };
-  }
-  const reason = verifySnapshot(snapshot);
-  if (reason) return { attackId: 'policy_snapshot', expected, observed: `사본 검증 실패로 중단 (복원 실행 안 함): ${reason}` };
-  const { fileURLToPath } = await import('node:url');
-  const changes = diffPolicy(snapshot, readCurrentPolicy(fileURLToPath(root)));
-  return { attackId: 'policy_snapshot', expected,
-    observed: `사본 검증 통과(정책 버전 ${snapshot.policyRevision}), 현재 정책과의 차이 ${changes.length}개 (복원 실행 안 함)` };
-}
-
-// 11단계: 실제 배포의 설치형 앱 설정과 기기 승인 상태를 읽어 봅니다. 승인 여부는 서버 응답만 적고 메모 내용은 기록하지 않습니다.
-async function deviceAppCheck(app) {
-  const expected = '앱 설정(manifest)이 있고, 서버는 이 기기를 승인 전으로 답하며, 화면 HTML에는 메모가 없음';
-  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(8000) });
-  const json = async response => { try { return await response.json(); } catch { return null; } };
-  let manifestResponse; let statusResponse; let page;
-  try {
-    [manifestResponse, statusResponse, page] = await Promise.all([get('/manifest.json'), get('/api/device/status'), get('/')]);
-  } catch {
-    return { attackId: 'device_app', expected, observed: '요청을 보내지 못해 미실행' };
-  }
-  const manifest = manifestResponse.ok ? await json(manifestResponse) : null;
-  const status = statusResponse.ok ? await json(statusResponse) : null;
-  const html = page.ok ? await page.text() : '';
-  const linked = html.includes('rel="manifest"');
-  return { attackId: 'device_app', expected,
-    observed: `manifest HTTP ${manifestResponse.status} 이름 ${manifest?.name ?? '-'}, 화면 manifest 연결 ${linked ? '있음' : '없음'}, 기기 상태 HTTP ${statusResponse.status} approved=${status?.approved ?? '-'}` };
-}
-
-// 12단계: 실제 배포의 탈환 작전실 화면과 서버 기록(`/api/ops`)을 읽어 봅니다. 응답 본문의 항목 수와 요약이 맞는지만 적고 메모 본문은 기록하지 않습니다.
-async function opsScreenCheck(app) {
-  const expected = '작전실 화면과 서버 기록이 있고, 항목 수와 요약이 서로 맞으며 미실행이 구분됨';
-  // /api/ops 는 서버가 여러 요청을 보내 확인하므로 조금 더 기다리되, 두 요청을 동시에 보내 전체 대기를 15초 안으로 묶는다.
-  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(15000) });
-  let page; let response;
-  try {
-    [page, response] = await Promise.all([get('/ops.html'), get('/api/ops')]);
-  } catch {
-    return { attackId: 'ops_screen', expected, observed: '요청을 보내지 못해 미실행' };
-  }
-  let data = null;
-  try { data = response.ok ? await response.json() : null; } catch { /* JSON 아님 */ }
-  const s = data?.summary;
-  const matches = Array.isArray(data?.items) && s?.total === data.items.length && s.asExpected + s.unexpected + s.notRun === s.total;
-  return { attackId: 'ops_screen', expected,
-    observed: `작전실 화면 HTTP ${page.status}, 서버 기록 HTTP ${response.status}, 항목 ${s?.total ?? '-'}개(실제 API ${s?.liveApi ?? '-'}, 코드 실행 ${s?.codeRun ?? '-'}, 미실행 ${s?.notRun ?? '-'}), 기대와 다름 ${s?.unexpected ?? '-'}, 수치 일치 ${matches ? '예' : '아니오'}` };
-}
-
