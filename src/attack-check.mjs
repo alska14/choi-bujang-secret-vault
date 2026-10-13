@@ -53,6 +53,7 @@ async function anonymousChecks(app, config) {
   if (config.step >= 7) checks.push(await compoundAnomalyCheck());
   if (config.step >= 8) checks.push(await otherZoneCheck());
   if (config.step >= 9) checks.push(await burstReadCheck());
+  if (config.step >= 11) checks.push(await deviceAppCheck(app));
   if (config.step >= 10) {
     checks.push(await restoreUnauthCheck(app));
     checks.push(await policySnapshotCheck());
@@ -169,4 +170,20 @@ async function policySnapshotCheck() {
   const changes = diffPolicy(snapshot, readCurrentPolicy(fileURLToPath(root)));
   return { attackId: 'policy_snapshot', expected,
     observed: `사본 검증 통과(정책 버전 ${snapshot.policyRevision}), 현재 정책과의 차이 ${changes.length}개 (복원 실행 안 함)` };
+}
+
+// 11단계: 실제 배포의 설치형 앱 설정과 기기 승인 상태를 읽어 봅니다. 승인 여부는 서버 응답만 적고 메모 내용은 기록하지 않습니다.
+async function deviceAppCheck(app) {
+  const expected = '앱 설정(manifest)이 있고, 서버는 이 기기를 승인 전으로 답하며, 화면 HTML에는 메모가 없음';
+  const get = path => fetch(new URL(path, app), { redirect: 'error', signal: AbortSignal.timeout(10000) });
+  const json = async response => { try { return await response.json(); } catch { return null; } };
+  const manifestResponse = await get('/manifest.json');
+  const manifest = manifestResponse.ok ? await json(manifestResponse) : null;
+  const statusResponse = await get('/api/device/status');
+  const status = statusResponse.ok ? await json(statusResponse) : null;
+  const page = await get('/');
+  const html = page.ok ? await page.text() : '';
+  const linked = html.includes('rel="manifest"');
+  return { attackId: 'device_app', expected,
+    observed: `manifest HTTP ${manifestResponse.status} 이름 ${manifest?.name ?? '-'}, 화면 manifest 연결 ${linked ? '있음' : '없음'}, 기기 상태 HTTP ${statusResponse.status} approved=${status?.approved ?? '-'}` };
 }

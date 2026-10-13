@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BYTE BACK | 자료실</title>
+  <title>나의 자료실</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#101a28">
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     body { margin: 0; min-height: 100vh; background: #101a28; color: #ecf4ff; }
@@ -28,10 +31,20 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 3단계 로그인</div>
+    <div class="eyebrow">BYTE BACK · 나의 자료실</div>
     <h1>내 자료실</h1>
     <p>모든 기록은 실습을 위해 만든 가상 자료입니다. 실제 개인정보나 비밀번호는 넣지 마세요.</p>
-    <div class="notice">로그인하면 내 가상 메모를 추가·수정·삭제할 수 있습니다. 다른 사람의 메모 접근 제한은 4단계에서 붙입니다.</div>
+    <div class="notice">메모는 로그인하고, 이 기기를 서버가 승인한 뒤에만 보입니다. 앱으로 설치했다는 표시만으로는 기기가 승인되지 않습니다.</div>
+
+    <section id="device" class="box" aria-live="polite">
+      <h2>이 기기의 상태</h2>
+      <p id="device-state">서버에 기기 승인 여부를 묻는 중입니다.</p>
+      <div class="row">
+        <button type="button" id="device-check">승인 상태 확인</button>
+        <button type="button" id="device-request">기기 승인 요청 안내</button>
+      </div>
+      <p id="offline-note" hidden>오프라인입니다. 메모는 서버가 확인한 뒤에만 보이므로 연결되기 전에는 아무것도 보이지 않습니다.</p>
+    </section>
 
     <section id="auth" class="box" aria-live="polite">
       <form id="login-form" hidden>
@@ -69,6 +82,7 @@
     const list = $('#notes');
     const STORE = 'vault.session';
     let session = null;
+    let deviceApproved = false; // 서버가 승인했다고 답할 때만 true. 버튼이나 설치 표시로는 바뀌지 않습니다.
 
     const readStore = () => { try { return JSON.parse(localStorage.getItem(STORE)); } catch { return null; } };
     const writeStore = value => {
@@ -152,17 +166,50 @@
       loginForm.hidden = Boolean(next);
       $('#session').hidden = !next;
       $('#who').textContent = next ? `로그인됨: ${next.email}` : '';
-      $('#memo-area').hidden = !next;
+      gate();
       $('#logged-out').hidden = Boolean(next);
       if (!reload) return;
       list.replaceChildren();
       say(memoMessage, '');
-      if (next) run(async () => {});
+      if (next && deviceApproved) run(async () => {});
     }
     const fail = error => say(authMessage, `실패: ${error.message}`);
     const credentials = () => ({ email: loginForm.email.value.trim(), password: loginForm.password.value });
 
+    // 승인 전에는 메모를 요청하지도 보여 주지도 않습니다.
+    function gate() {
+      const open = Boolean(session) && deviceApproved;
+      $('#memo-area').hidden = !open;
+      if (!open) list.replaceChildren();
+      return open;
+    }
+    // 기기 키·서명·토큰은 이 화면의 저장소에 두지 않습니다. 승인 여부는 서버 응답으로만 알립니다.
+    async function loadDevice() {
+      try {
+        const response = await fetch('/api/device/status', { cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        deviceApproved = response.ok && data?.approved === true;
+      } catch { deviceApproved = false; }
+      say($('#device-state'), deviceApproved
+        ? '서버가 이 기기를 승인했습니다.'
+        : '이 기기는 아직 승인되지 않았습니다. 승인 전에는 메모를 보여 주지 않습니다.');
+      if (gate()) run(async () => {});
+    }
+    const showOffline = () => { $('#offline-note').hidden = navigator.onLine; };
+    addEventListener('online', () => { showOffline(); loadDevice(); });
+    addEventListener('offline', showOffline);
+    showOffline();
+    $('#device-check').addEventListener('click', loadDevice);
+    $('#device-request').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/device/request', { method: 'POST', cache: 'no-store' });
+        const data = await response.json().catch(() => null);
+        say($('#device-state'), data?.message ?? '승인 요청 안내를 받지 못했습니다.');
+      } catch { say($('#device-state'), '서버에 연결하지 못했습니다.'); }
+    });
+
     setSession(readStore());
+    loadDevice();
     loginForm.addEventListener('submit', async event => {
       event.preventDefault();
       say(authMessage, '');

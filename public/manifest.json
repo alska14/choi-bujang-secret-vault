@@ -1,0 +1,14 @@
+{
+  "name": "나의 자료실",
+  "short_name": "자료실",
+  "description": "로그인과 기기 승인을 서버가 확인한 뒤에만 내 가상 메모를 보여 주는 자료실입니다. 앱으로 설치했다는 표시만으로 기기가 승인되지 않습니다.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101a28",
+  "theme_color": "#101a28",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
