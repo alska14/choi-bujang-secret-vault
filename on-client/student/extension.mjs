@@ -6,8 +6,10 @@ const SESSION_LABEL = { active: '활성', expired: '만료', revoked: '철회됨
 const MODE_LABEL = { demo: '예제 자료', disconnected: '연결 없음', unknown: '확인 불가' };
 
 // 알 수 없는 값은 정상으로 바꾸지 않고 확인 불가로 둔다.
-const deviceText = (status) => DEVICE_LABEL[status] ?? DEVICE_LABEL.unknown;
-const sessionText = (status) => SESSION_LABEL[status] ?? SESSION_LABEL.unknown;
+// 한글 설명 옆에 서버가 준 원래 상태 코드를 괄호로 함께 보여 준다. 값이 없으면 코드는 unknown 으로 적는다.
+const raw = (status) => (typeof status === 'string' && status ? status : 'unknown');
+const deviceText = (status) => `${DEVICE_LABEL[status] ?? DEVICE_LABEL.unknown} (${raw(status)})`;
+const sessionText = (status) => `${SESSION_LABEL[status] ?? SESSION_LABEL.unknown} (${raw(status)})`;
 
 function node(tag, text, className) {
   const element = document.createElement(tag);
